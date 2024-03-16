@@ -92,6 +92,7 @@
 #include "shapes/cylinder.h"
 #include "shapes/disk.h"
 #include "shapes/heightfield.h"
+#include "shapes/heightfield2.h"
 #include "shapes/hyperboloid.h"
 #include "shapes/loopsubdiv.h"
 #include "shapes/nurbs.h"
@@ -449,7 +450,11 @@ std::vector<std::shared_ptr<Shape>> MakeShapes(const std::string &name,
     else if (name == "hyperboloid")
         s = CreateHyperboloidShape(object2world, world2object,
                                    reverseOrientation, paramSet);
-    if (s != nullptr) shapes.push_back(s);
+    else if (name == "heightfield2")
+        s = CreateHeightfield2(object2world, world2object,
+                                    reverseOrientation, paramSet);
+	
+	if (s != nullptr) shapes.push_back(s);
 
     // Create multiple-_Shape_ types
     else if (name == "curve")
