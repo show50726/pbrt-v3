@@ -172,18 +172,12 @@ Heightfield::GridAccel::GridAccel(Heightfield* hf)
 				topLeft,
 				topRight
 			};
-			std::cout << bottomLeft << " " << topLeft << " " << topRight << std::endl;
 			std::vector<Point3f> triangle2 =
 			{
 				bottomLeft,
 				topRight,
 				bottomRight,
 			};
-			std::cout << bottomLeft << " " << topRight << " " << bottomRight << std::endl;
-			// Make two triangles and add them into voxels
-			/*auto leftTriangle = std::make_shared<Triangle>(
-				hf->ObjectToWorld, hf->WorldToObject,
-				false, mesh, i)*/
 			if (!voxels[index]) {
 				// Allocate new voxel and store primitive in it
 				voxels[index] = voxelArena.Alloc<Voxel>();
@@ -268,24 +262,9 @@ bool Heightfield::Intersect(const Ray &ray, Float *tHit,
 	bool hitGrid = grid->Intersect(rayOS, isect);
 	if (!hitGrid) return false;
 	return true;
-
-	/*tHit = &hitt0;
-	Point3f pHit = rayOS(*tHit);
-	Vector3f pError = Vector3f(0, 0, 0);
-	*isect = (*ObjectToWorld)(SurfaceInteraction(pHit, pError, Point2f(0, 0),
-		-rayOS.d, Vector3f(1, 0, 0), Vector3f(0, 0, 1), Normal3f(0, 0, 0), Normal3f(0, 0, 0),
-		rayOS.time, this));*/
-	/*return true;*/
 }
 
 bool Heightfield::IntersectP(const Ray &ray, bool testAlphaTexture) const {
-	/*float rayStartZ = ray.o.z;
-	if (fabsf(ray.d.z) < 1e-7) return false;
-	float t = ray.d.z == 0
-		? -1.0f
-		: (0.0f - rayStartZ) / ray.d.z;
-	if (t < 0.0f || t > ray.tMax)
-		return false;*/
 	// TODO: Impl
 	return false;
 }
