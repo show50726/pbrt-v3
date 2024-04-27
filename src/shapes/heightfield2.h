@@ -94,7 +94,7 @@ class Heightfield : public Shape {
 	private:
 		// GridAccel Private Methods
 		int posToVoxel(const Point3f &P, int axis) const {
-			int v = static_cast<int>((P[axis] - heightfield->ObjectBound().pMin[axis]) *
+			int v = static_cast<int>((P[axis] - bounds.pMin[axis]) *
 				invWidth[axis]);
 			return Clamp(v, 0, nVoxels[axis] - 1);
 		}

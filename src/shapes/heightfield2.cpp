@@ -41,7 +41,6 @@
 #include "error.h"
 #include "triangle.h"
 
-
 namespace pbrt {
 
 bool Heightfield::Voxel::Intersect(
@@ -134,11 +133,16 @@ Heightfield::GridAccel::GridAccel(Heightfield* hf)
 	nVoxels[1] = hf->ny - 1;
 	nVoxels[2] = 1;
 	bounds = hf->ObjectBound();
-	width = invWidth = Vector3f(1, 1, 1);
+
+	Vector3f delta = bounds.pMax - bounds.pMin;
+	for (int axis = 0; axis < 3; ++axis) {
+		width[axis] = delta[axis] / nVoxels[axis];
+		invWidth[axis] = (width[axis] == 0.f) ? 0.f : 1.f / width[axis];
+	}
 
 	int nv = nVoxels[0] * nVoxels[1] * nVoxels[2];
+
 	voxels = AllocAligned<Voxel *>(nv);
-	// TODO: need memset?
 	memset(voxels, 0, nv * sizeof(Voxel *));
 
 	for (int i = 0; i < nVoxels[0]; i++) {
@@ -159,7 +163,6 @@ Heightfield::GridAccel::GridAccel(Heightfield* hf)
 				1.0f / nVoxels[0] * i,
 				1.0f / nVoxels[1] * (j + 1),
 				heightfield->z[topLeftIndex]);
-			std::cout << topLeftIndex << std::endl;
 			int topRightIndex = VERT(i + 1, j + 1);
 			Point3f topRight = Point3f(
 				1.0f / nVoxels[0] * (i + 1),
@@ -202,9 +205,79 @@ Heightfield::GridAccel::~GridAccel() {
 bool Heightfield::GridAccel::Intersect(
 	const Ray &ray, 
 	SurfaceInteraction *isect) const {
-	int n = nVoxels[0] * nVoxels[1] * nVoxels[2];
+	float rayT = 0.0f;
+	Ray curRay = ray;
+	
+	Float hitt0, hitt1;
+	if (!bounds.IntersectP(curRay, &hitt0, &hitt1)) {
+		return false;
+	}
+	rayT = hitt0;
+	Point3f gridIntersect = curRay(rayT);
+
+	Float NextCrossingT[3], DeltaT[3];
+	int Step[3], Out[3], Pos[3];
+	for (int axis = 0; axis < 3; ++axis) {
+		if (curRay.d[axis] == -0.f) curRay.d[axis] = 0.f;
+		// Compute current voxel for axis
+		Pos[axis] = posToVoxel(gridIntersect, axis);
+		if (curRay.d[axis] >= 0) {
+			// Handle ray with positive direction for voxel stepping
+			NextCrossingT[axis] = rayT +
+				(voxelToPos(Pos[axis] + 1, axis) - gridIntersect[axis]) / curRay.d[axis];
+			DeltaT[axis] = width[axis] / curRay.d[axis];
+			Step[axis] = 1;
+			Out[axis] = nVoxels[axis];
+		}
+		else {
+			// Handle ray with negative direction for voxel stepping
+			NextCrossingT[axis] = rayT +
+				(voxelToPos(Pos[axis], axis) - gridIntersect[axis]) / curRay.d[axis];
+			DeltaT[axis] = -width[axis] / curRay.d[axis];
+			Step[axis] = -1;
+			Out[axis] = -1;
+		}
+	}
+
+	bool hitSomething = false;
+	Float minT = MaxFloat;
+	SurfaceInteraction curInteraction;
+	for (;;) {
+		// Check for intersection in current voxel and advance to next
+		Voxel *voxel = voxels[offset(Pos[0], Pos[1], Pos[2])];
+		// PBRT_GRID_RAY_TRAVERSED_VOXEL(Pos, voxel ? voxel->size() : 0);
+		if (voxel != NULL) {
+			bool hit = voxel->Intersect(curRay, &curInteraction);
+			hitSomething |= hit;
+			if (hit) {
+				Float t = (curInteraction.p.x - curRay.o.x) / curRay.d.x;
+				if (t < minT) {
+					minT = t;
+					*isect = curInteraction;
+				}
+			}
+		}
+
+		// Advance to next voxel
+
+		// Find _stepAxis_ for stepping to next voxel
+		int bits = ((NextCrossingT[0] < NextCrossingT[1]) << 2) +
+			((NextCrossingT[0] < NextCrossingT[2]) << 1) +
+			((NextCrossingT[1] < NextCrossingT[2]));
+		const int cmpToAxis[8] = { 2, 1, 2, 1, 2, 2, 0, 0 };
+		int stepAxis = cmpToAxis[bits];
+		if (curRay.tMax < NextCrossingT[stepAxis])
+			break;
+		Pos[stepAxis] += Step[stepAxis];
+		if (Pos[stepAxis] == Out[stepAxis])
+			break;
+		NextCrossingT[stepAxis] += DeltaT[stepAxis];
+	}
+	return hitSomething;
+	/*int n = nVoxels[0] * nVoxels[1] * nVoxels[2];
 	SurfaceInteraction currSect;
 	Float shortestT = MaxFloat;
+	
 	for (int i = 0; i < n; i++) {
 		if (!voxels[i]->Intersect(
 			ray, &currSect))
@@ -217,8 +290,7 @@ bool Heightfield::GridAccel::Intersect(
 		shortestT = currentT;
 		(*isect) = currSect;
 		return true;
-	}
-	return false;
+	}*/
 }
 
 bool Heightfield::GridAccel::IntersectP(const Ray &ray) const {
@@ -261,6 +333,7 @@ bool Heightfield::Intersect(const Ray &ray, Float *tHit,
 
 	bool hitGrid = grid->Intersect(rayOS, isect);
 	if (!hitGrid) return false;
+	
 	return true;
 }
 
