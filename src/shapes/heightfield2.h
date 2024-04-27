@@ -59,10 +59,66 @@ class Heightfield : public Shape {
     Float Area() const;
     Interaction Sample(const Point2f &u, Float *pdf) const;
 
+	struct Voxel {
+		// Voxel Public Methods
+		uint32_t size() const { return triangles.size(); }
+		Voxel() { }
+		Voxel(const Transform * objToWorld, 
+			std::vector<Point3f> op) : 
+			objToWorld (objToWorld) {
+			allCanIntersect = false;
+			triangles.push_back(op);
+		}
+		void AddTriangle(std::vector<Point3f> prim) {
+			triangles.push_back(prim);
+		}
+		bool Intersect(const Ray &ray, SurfaceInteraction *isect);
+		bool IntersectP(const Ray &ray);
+		bool Intersect(const Ray &ray, std::vector<Point3f> triangle, SurfaceInteraction *isect);
+		bool IntersectP(const Ray &ray, std::vector<Point3f> triangle);
+	private:
+		std::vector<std::vector<Point3f>> triangles;
+		const Transform * objToWorld;
+		bool allCanIntersect;
+	};
+
+	// GridAccel Declarations
+	class GridAccel {
+	public:
+		// GridAccel Public Methods
+		GridAccel(Heightfield* hf);
+		~GridAccel();
+		bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
+		bool IntersectP(const Ray &ray) const;
+
+	private:
+		// GridAccel Private Methods
+		int posToVoxel(const Point3f &P, int axis) const {
+			int v = static_cast<int>((P[axis] - heightfield->ObjectBound().pMin[axis]) *
+				invWidth[axis]);
+			return Clamp(v, 0, nVoxels[axis] - 1);
+		}
+		float voxelToPos(int p, int axis) const {
+			return bounds.pMin[axis] + p * width[axis];
+		}
+		inline int offset(int x, int y, int z) const {
+			return z * nVoxels[0] * nVoxels[1] + y * nVoxels[0] + x;
+		}
+
+		int nVoxels[3];
+		Heightfield* heightfield;
+		Bounds3f bounds;
+		Vector3f width, invWidth;
+		Voxel **voxels;
+		MemoryArena voxelArena;
+	};
+
+
   private:
     // Heightfield Private Data
     float *z;
     int nx, ny;
+	std::unique_ptr<GridAccel> grid;
 };
 
 std::shared_ptr<Heightfield> CreateHeightfield2(const Transform *o2w,
