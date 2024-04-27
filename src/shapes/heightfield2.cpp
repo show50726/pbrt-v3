@@ -48,16 +48,21 @@ bool Heightfield::Voxel::Intersect(
 	const Ray &ray, 
 	SurfaceInteraction *isect) {
 	Float minT = INT_FAST32_MAX;
+	SurfaceInteraction currSect;
+	Float shortestT = MaxFloat;
 	for (size_t i = 0; i < triangles.size(); ++i) {
-		SurfaceInteraction surf;
 		if (!Intersect(
 			ray, 
 			triangles[i], 
-			&surf))
+			&currSect))
 			continue;
 
-		// TODO: Use primitive with smallest T
-		*isect = surf;
+		Float currentT = (currSect.p.x - ray.o.x) / ray.d.x;
+		if (currentT > shortestT)
+			continue;
+
+		shortestT = currentT;
+		(*isect) = currSect;
 		return true;
 	}
 	return false;
@@ -136,42 +141,45 @@ Heightfield::GridAccel::GridAccel(Heightfield* hf)
 	// TODO: need memset?
 	memset(voxels, 0, nv * sizeof(Voxel *));
 
-	int totalT = 0;
 	for (int i = 0; i < nVoxels[0]; i++) {
 		for (int j = 0; j < nVoxels[1]; j++) {
 			int index = offset(i, j, 0);
+#define VERT(x, y) ((x) + (y)*this->heightfield->nx)
 			Point3f bottomLeft = Point3f(
 				1.0f / nVoxels[0] * i,
 				1.0f / nVoxels[1] * j,
-				heightfield->z[index]);
-			int bottomRightIndex = offset(i + 1, j, 0);
+				heightfield->z[VERT(i, j)]);
+			int bottomRightIndex = VERT(i + 1, j);
 			Point3f bottomRight = Point3f(
 				1.0f / nVoxels[0] * (i + 1),
 				1.0f / nVoxels[1] * j,
 				heightfield->z[bottomRightIndex]);
-			int topLeftIndex = offset(i, j + 1, 0);
+			int topLeftIndex = VERT(i, j + 1);
 			Point3f topLeft = Point3f(
 				1.0f / nVoxels[0] * i,
 				1.0f / nVoxels[1] * (j + 1),
 				heightfield->z[topLeftIndex]);
-			int topRightIndex = offset(i + 1, j + 1, 0);
+			std::cout << topLeftIndex << std::endl;
+			int topRightIndex = VERT(i + 1, j + 1);
 			Point3f topRight = Point3f(
 				1.0f / nVoxels[0] * (i + 1),
 				1.0f / nVoxels[1] * (j + 1),
 				heightfield->z[topRightIndex]);
+#undef VERT
 			std::vector<Point3f> triangle1 =
 			{
 				bottomLeft,
 				topLeft,
-				bottomRight
+				topRight
 			};
+			std::cout << bottomLeft << " " << topLeft << " " << topRight << std::endl;
 			std::vector<Point3f> triangle2 =
 			{
 				bottomLeft,
 				topRight,
-				bottomRight
+				bottomRight,
 			};
-			totalT += 2;
+			std::cout << bottomLeft << " " << topRight << " " << bottomRight << std::endl;
 			// Make two triangles and add them into voxels
 			/*auto leftTriangle = std::make_shared<Triangle>(
 				hf->ObjectToWorld, hf->WorldToObject,
@@ -189,7 +197,6 @@ Heightfield::GridAccel::GridAccel(Heightfield* hf)
 			}
 		}
 	}
-	std::cout << totalT << std::endl;
 }
 
 Heightfield::GridAccel::~GridAccel() {
@@ -203,10 +210,17 @@ bool Heightfield::GridAccel::Intersect(
 	SurfaceInteraction *isect) const {
 	int n = nVoxels[0] * nVoxels[1] * nVoxels[2];
 	SurfaceInteraction currSect;
+	Float shortestT = MaxFloat;
 	for (int i = 0; i < n; i++) {
 		if (!voxels[i]->Intersect(
 			ray, &currSect))
 			continue;
+
+		Float currentT = (currSect.p.x - ray.o.x) / ray.d.x;
+		if (currentT > shortestT)
+			continue;
+
+		shortestT = currentT;
 		(*isect) = currSect;
 		return true;
 	}
