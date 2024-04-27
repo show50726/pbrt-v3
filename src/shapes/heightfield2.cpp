@@ -333,6 +333,7 @@ bool Heightfield::Intersect(const Ray &ray, Float *tHit,
 
 	bool hitGrid = grid->Intersect(rayOS, isect);
 	if (!hitGrid) return false;
+	*tHit = (isect->p.x - ray.o.x) / ray.d.x;
 	
 	return true;
 }
