@@ -101,8 +101,9 @@ bool Heightfield::Voxel::Intersect(
 		return false;
 
 	Vector3f dpdu, dpdv;
+	Point3f p = ray(t);
 	CoordinateSystem(Normalize(Cross(e2, e1)), &dpdu, &dpdv);
-	*isect = (*objToWorld)(SurfaceInteraction(ray(t), Vector3f(0, 0, 0), Point2f(0, 0),
+	*isect = (*objToWorld)(SurfaceInteraction(p, Vector3f(0, 0, 0), Point2f(p.x, p.y),
 		-ray.d, dpdu, dpdv, Normal3f(0, 0, 0), Normal3f(0, 0, 0),
 		ray.time, nullptr));
 	return true;
