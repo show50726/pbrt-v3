@@ -74,9 +74,9 @@ class Heightfield : public Shape {
 			triangles.push_back(prim);
 			normals.push_back(nm);
 		}
-		bool Intersect(const Ray &ray, SurfaceInteraction *isect);
+		bool Intersect(const Ray &ray, Float* tHit, SurfaceInteraction *isect);
 		bool IntersectP(const Ray &ray);
-		bool Intersect(const Ray &ray, std::vector<Point3f> triangle, std::vector<Normal3f> normal, SurfaceInteraction *isect);
+		bool Intersect(const Ray &ray, Float* tHit, std::vector<Point3f> triangle, std::vector<Normal3f> normal, SurfaceInteraction *isect);
 		bool IntersectP(const Ray &ray, std::vector<Point3f> triangle);
 	private:
 		std::vector<std::vector<Point3f>> triangles;

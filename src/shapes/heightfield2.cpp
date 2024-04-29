@@ -45,23 +45,17 @@ namespace pbrt {
 
 bool Heightfield::Voxel::Intersect(
 	const Ray &ray, 
+	Float* tHit,
 	SurfaceInteraction *isect) {
-	SurfaceInteraction currSect;
-	Float shortestT = MaxFloat;
 	for (size_t i = 0; i < triangles.size(); ++i) {
 		if (!Intersect(
 			ray, 
+			tHit,
 			triangles[i], 
 			normals[i],
-			&currSect))
+			isect))
 			continue;
 
-		Float currentT = (currSect.p.x - ray.o.x) / ray.d.x;
-		if (currentT > shortestT)
-			continue;
-
-		shortestT = currentT;
-		(*isect) = currSect;
 		return true;
 	}
 	return false;
@@ -69,6 +63,7 @@ bool Heightfield::Voxel::Intersect(
 
 bool Heightfield::Voxel::Intersect(
 	const Ray &ray, 
+	Float* tHit,
 	std::vector<Point3f> triangle, 
 	std::vector<Normal3f> normal,
 	SurfaceInteraction *isect) {
@@ -101,7 +96,7 @@ bool Heightfield::Voxel::Intersect(
 
 	// Compute _t_ to intersection point
 	float t = Dot(e2, s2) * invDivisor;
-	if (t < 0 || t > ray.tMax)
+	if (t < 0 || t > ray.tMax || t > *tHit)
 		return false;
 
 	// Calculate tangent and bitangent
@@ -135,6 +130,7 @@ bool Heightfield::Voxel::Intersect(
 		(std::abs(b0 * p1.z) + std::abs(b1 * p2.z) + std::abs(b2 * p3.z));
 	Vector3f pError = gamma(7) * Vector3f(xAbsSum, yAbsSum, zAbsSum);
 
+	*tHit = t;
 	*isect = (*objToWorld)(SurfaceInteraction(p, pError, Point2f(p.x, p.y),
 		-ray.d, dpdu, dpdv, dndu, dndv,
 		ray.time, nullptr));
@@ -337,22 +333,13 @@ bool Heightfield::GridAccel::Intersect(
 	}
 
 	bool hitSomething = false;
-	Float minT = MaxFloat;
-	SurfaceInteraction curInteraction;
+	float minT = MaxFloat;
 	for (;;) {
 		// Check for intersection in current voxel and advance to next
 		Voxel *voxel = voxels[offset(Pos[0], Pos[1], Pos[2])];
 		// PBRT_GRID_RAY_TRAVERSED_VOXEL(Pos, voxel ? voxel->size() : 0);
 		if (voxel != NULL) {
-			bool hit = voxel->Intersect(curRay, &curInteraction);
-			hitSomething |= hit;
-			if (hit) {
-				Float t = (curInteraction.p.x - curRay.o.x) / curRay.d.x;
-				if (t < minT) {
-					minT = t;
-					*isect = curInteraction;
-				}
-			}
+			hitSomething |= voxel->Intersect(curRay, &minT, isect);
 		}
 
 		// Advance to next voxel
@@ -406,10 +393,6 @@ bool Heightfield::Intersect(const Ray &ray, Float *tHit,
                             bool testAlphaTexture) const {
 	Vector3f oErr, dErr;
 	Ray rayOS = (*WorldToObject)(ray, &oErr, &dErr);
-
-	Float hitt0, hitt1;
-    bool hitBound = ObjectBound().IntersectP(rayOS, &hitt0, &hitt1);
-    if (!hitBound) return false;
 
 	bool hitGrid = grid->Intersect(rayOS, isect);
 	if (!hitGrid) return false;
