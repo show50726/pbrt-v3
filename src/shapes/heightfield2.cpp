@@ -84,6 +84,7 @@ bool Heightfield::Voxel::Intersect(
 		return false;
 	float invDivisor = 1.f / divisor;
 
+
 	// Compute first barycentric coordinate
 	Vector3f s = ray.o - p1;
 	float b1 = Dot(s, s1) * invDivisor;
@@ -96,6 +97,8 @@ bool Heightfield::Voxel::Intersect(
 	if (b2 < 0. || b1 + b2 > 1.)
 		return false;
 
+	float b0 = 1.0f - b1 - b2;
+
 	// Compute _t_ to intersection point
 	float t = Dot(e2, s2) * invDivisor;
 	if (t < 0 || t > ray.tMax)
@@ -106,6 +109,7 @@ bool Heightfield::Voxel::Intersect(
 	Point3f p = ray(t);
 	CoordinateSystem(Normalize(Cross(e2, e1)), &dpdu, &dpdv);
 
+	// Calculate dndu, dndv
 	Normal3f dndu, dndv;
 	float du1 = p1.x - p3.x;
 	float du2 = p2.x - p3.x;
@@ -122,11 +126,20 @@ bool Heightfield::Voxel::Intersect(
 		dndv = (-du2 * dn1 + du1 * dn2) * invdet;
 	}
 
-	*isect = (*objToWorld)(SurfaceInteraction(p, Vector3f(0, 0, 0), Point2f(p.x, p.y),
+	// Calculate error bounds
+	Float xAbsSum =
+		(std::abs(b0 * p1.x) + std::abs(b1 * p2.x) + std::abs(b2 * p3.x));
+	Float yAbsSum =
+		(std::abs(b0 * p1.y) + std::abs(b1 * p2.y) + std::abs(b2 * p3.y));
+	Float zAbsSum =
+		(std::abs(b0 * p1.z) + std::abs(b1 * p2.z) + std::abs(b2 * p3.z));
+	Vector3f pError = gamma(7) * Vector3f(xAbsSum, yAbsSum, zAbsSum);
+
+	*isect = (*objToWorld)(SurfaceInteraction(p, pError, Point2f(p.x, p.y),
 		-ray.d, dpdu, dpdv, dndu, dndv,
 		ray.time, nullptr));
 
-	float b0 = 1.0f - b1 - b2;
+	
 	Normal3f nm = normal[0] * b0 + normal[1] * b1 + normal[2] * b2;
 	nm = Normalize((*objToWorld)(nm));
 	isect->n = isect->shading.n = nm;
@@ -358,23 +371,6 @@ bool Heightfield::GridAccel::Intersect(
 		NextCrossingT[stepAxis] += DeltaT[stepAxis];
 	}
 	return hitSomething;
-	/*int n = nVoxels[0] * nVoxels[1] * nVoxels[2];
-	SurfaceInteraction currSect;
-	Float shortestT = MaxFloat;
-	
-	for (int i = 0; i < n; i++) {
-		if (!voxels[i]->Intersect(
-			ray, &currSect))
-			continue;
-
-		Float currentT = (currSect.p.x - ray.o.x) / ray.d.x;
-		if (currentT > shortestT)
-			continue;
-
-		shortestT = currentT;
-		(*isect) = currSect;
-		return true;
-	}*/
 }
 
 bool Heightfield::GridAccel::IntersectP(const Ray &ray) const {
@@ -410,7 +406,7 @@ bool Heightfield::Intersect(const Ray &ray, Float *tHit,
                             bool testAlphaTexture) const {
 	Vector3f oErr, dErr;
 	Ray rayOS = (*WorldToObject)(ray, &oErr, &dErr);
-	
+
 	Float hitt0, hitt1;
     bool hitBound = ObjectBound().IntersectP(rayOS, &hitt0, &hitt1);
     if (!hitBound) return false;
@@ -430,7 +426,7 @@ bool Heightfield::IntersectP(const Ray &ray, bool testAlphaTexture) const {
 Float Heightfield::Area() const { return 1.0f; }
 
 Interaction Heightfield::Sample(const Point2f &u, Float *pdf) const {
-    Error("Not implemented 1");
+    Error("Sample of Heightfield is not implemented");
     return Interaction();
 }
 
