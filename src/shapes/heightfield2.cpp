@@ -99,10 +99,12 @@ bool Heightfield::Voxel::Intersect(
 	if (t < 0 || t > ray.tMax || t > *tHit)
 		return false;
 
+	Normal3f interpolatedNormal = Normalize(normal[0] * b0 + normal[1] * b1 + normal[2] * b2);
+
 	// Calculate tangent and bitangent
 	Vector3f dpdu, dpdv;
 	Point3f p = ray(t);
-	CoordinateSystem(Normalize(Cross(e2, e1)), &dpdu, &dpdv);
+	CoordinateSystem(Vector3f(interpolatedNormal), &dpdu, &dpdv);
 
 	// Calculate dndu, dndv
 	Normal3f dndu, dndv;
@@ -136,9 +138,8 @@ bool Heightfield::Voxel::Intersect(
 		ray.time, nullptr));
 
 	
-	Normal3f nm = normal[0] * b0 + normal[1] * b1 + normal[2] * b2;
-	nm = Normalize((*objToWorld)(nm));
-	isect->n = isect->shading.n = nm;
+	interpolatedNormal = Normalize((*objToWorld)(interpolatedNormal));
+	isect->n = isect->shading.n = interpolatedNormal;
 	return true;
 }
 
