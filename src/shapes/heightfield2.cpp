@@ -46,13 +46,13 @@ namespace pbrt {
 bool Heightfield::Voxel::Intersect(
 	const Ray &ray, 
 	SurfaceInteraction *isect) {
-	Float minT = INT_FAST32_MAX;
 	SurfaceInteraction currSect;
 	Float shortestT = MaxFloat;
 	for (size_t i = 0; i < triangles.size(); ++i) {
 		if (!Intersect(
 			ray, 
 			triangles[i], 
+			normals[i],
 			&currSect))
 			continue;
 
@@ -70,6 +70,7 @@ bool Heightfield::Voxel::Intersect(
 bool Heightfield::Voxel::Intersect(
 	const Ray &ray, 
 	std::vector<Point3f> triangle, 
+	std::vector<Normal3f> normal,
 	SurfaceInteraction *isect) {
 	const Point3f &p1 = triangle[0];
 	const Point3f &p2 = triangle[1];
@@ -100,12 +101,35 @@ bool Heightfield::Voxel::Intersect(
 	if (t < 0 || t > ray.tMax)
 		return false;
 
+	// Calculate tangent and bitangent
 	Vector3f dpdu, dpdv;
 	Point3f p = ray(t);
 	CoordinateSystem(Normalize(Cross(e2, e1)), &dpdu, &dpdv);
+
+	Normal3f dndu, dndv;
+	float du1 = p1.x - p3.x;
+	float du2 = p2.x - p3.x;
+	float dv1 = p1.y - p3.y;
+	float dv2 = p2.y - p3.y;
+	Normal3f dn1 = normal[0] - normal[2];
+	Normal3f dn2 = normal[1] - normal[2];
+	float determinant = du1 * dv2 - dv1 * du2;
+	if (determinant == 0.f)
+		dndu = dndv = Normal3f(0, 0, 0);
+	else {
+		float invdet = 1.f / determinant;
+		dndu = (dv2 * dn1 - dv1 * dn2) * invdet;
+		dndv = (-du2 * dn1 + du1 * dn2) * invdet;
+	}
+
 	*isect = (*objToWorld)(SurfaceInteraction(p, Vector3f(0, 0, 0), Point2f(p.x, p.y),
-		-ray.d, dpdu, dpdv, Normal3f(0, 0, 0), Normal3f(0, 0, 0),
+		-ray.d, dpdu, dpdv, dndu, dndv,
 		ray.time, nullptr));
+
+	float b0 = 1.0f - b1 - b2;
+	Normal3f nm = normal[0] * b0 + normal[1] * b1 + normal[2] * b2;
+	nm = Normalize((*objToWorld)(nm));
+	isect->n = isect->shading.n = nm;
 	return true;
 }
 
@@ -146,14 +170,58 @@ Heightfield::GridAccel::GridAccel(Heightfield* hf)
 	voxels = AllocAligned<Voxel *>(nv);
 	memset(voxels, 0, nv * sizeof(Voxel *));
 
+
+	std::map<int, Normal3f> normalMap;
 	for (int i = 0; i < nVoxels[0]; i++) {
 		for (int j = 0; j < nVoxels[1]; j++) {
 			int index = offset(i, j, 0);
 #define VERT(x, y) ((x) + (y)*this->heightfield->nx)
+			int bottomLeftIndex = VERT(i, j);
 			Point3f bottomLeft = Point3f(
 				1.0f / nVoxels[0] * i,
 				1.0f / nVoxels[1] * j,
-				heightfield->z[VERT(i, j)]);
+				heightfield->z[bottomLeftIndex]);
+			int bottomRightIndex = VERT(i + 1, j);
+			Point3f bottomRight = Point3f(
+				1.0f / nVoxels[0] * (i + 1),
+				1.0f / nVoxels[1] * j,
+				heightfield->z[bottomRightIndex]);
+			int topLeftIndex = VERT(i, j + 1);
+			Point3f topLeft = Point3f(
+				1.0f / nVoxels[0] * i,
+				1.0f / nVoxels[1] * (j + 1),
+				heightfield->z[topLeftIndex]);
+			int topRightIndex = VERT(i + 1, j + 1);
+			Point3f topRight = Point3f(
+				1.0f / nVoxels[0] * (i + 1),
+				1.0f / nVoxels[1] * (j + 1),
+				heightfield->z[topRightIndex]);
+#undef VERT
+
+			Normal3f leftNormal = Normal3f(Normalize(Cross(topRight - bottomLeft, topLeft - bottomLeft)));
+			Normal3f rightNormal = Normal3f(Normalize(Cross(bottomRight - bottomLeft, topRight - bottomLeft)));
+			normalMap[bottomLeftIndex] += leftNormal;
+			normalMap[bottomLeftIndex] += rightNormal;
+			normalMap[bottomRightIndex] += rightNormal;
+			normalMap[topLeftIndex] += leftNormal;
+			normalMap[topRightIndex] += leftNormal;
+			normalMap[topRightIndex] += rightNormal;
+		}
+	}
+
+	for (auto& normalPair : normalMap) {
+		normalPair.second = Normalize(normalPair.second);
+	}
+
+	for (int i = 0; i < nVoxels[0]; i++) {
+		for (int j = 0; j < nVoxels[1]; j++) {
+			int index = offset(i, j, 0);
+#define VERT(x, y) ((x) + (y)*this->heightfield->nx)
+			int bottomLeftIndex = VERT(i, j);
+			Point3f bottomLeft = Point3f(
+				1.0f / nVoxels[0] * i,
+				1.0f / nVoxels[1] * j,
+				heightfield->z[bottomLeftIndex]);
 			int bottomRightIndex = VERT(i + 1, j);
 			Point3f bottomRight = Point3f(
 				1.0f / nVoxels[0] * (i + 1),
@@ -176,22 +244,37 @@ Heightfield::GridAccel::GridAccel(Heightfield* hf)
 				topLeft,
 				topRight
 			};
+			std::vector<Normal3f> normal1 =
+			{
+				normalMap[bottomLeftIndex],
+				normalMap[topLeftIndex],
+				normalMap[topRightIndex],
+			};
 			std::vector<Point3f> triangle2 =
 			{
 				bottomLeft,
 				topRight,
 				bottomRight,
 			};
+			std::vector<Normal3f> normal2 =
+			{
+				normalMap[bottomLeftIndex],
+				normalMap[topRightIndex],
+				normalMap[bottomRightIndex],
+			};
 			if (!voxels[index]) {
 				// Allocate new voxel and store primitive in it
 				voxels[index] = voxelArena.Alloc<Voxel>();
-				*voxels[index] = Voxel(heightfield->ObjectToWorld, std::move(triangle1));
-				(*voxels[index]).AddTriangle(std::move(triangle2));
+				*voxels[index] = Voxel(
+					heightfield->ObjectToWorld, 
+					std::move(triangle1),
+					std::move(normal1));
+				(*voxels[index]).AddTriangle(std::move(triangle2), std::move(normal2));
 			}
 			else {
 				// Add primitive to already-allocated voxel
-				voxels[index]->AddTriangle(std::move(triangle1));
-				voxels[index]->AddTriangle(std::move(triangle2));
+				voxels[index]->AddTriangle(std::move(triangle1), std::move(normal1));
+				voxels[index]->AddTriangle(std::move(triangle2), std::move(normal2));
 			}
 		}
 	}

@@ -64,22 +64,24 @@ class Heightfield : public Shape {
 		uint32_t size() const { return triangles.size(); }
 		Voxel() { }
 		Voxel(const Transform * objToWorld, 
-			std::vector<Point3f> op) : 
+			std::vector<Point3f> op,
+			std::vector<Normal3f> nm) : 
 			objToWorld (objToWorld) {
-			allCanIntersect = false;
 			triangles.push_back(op);
+			normals.push_back(nm);
 		}
-		void AddTriangle(std::vector<Point3f> prim) {
+		void AddTriangle(std::vector<Point3f> prim, std::vector<Normal3f> nm) {
 			triangles.push_back(prim);
+			normals.push_back(nm);
 		}
 		bool Intersect(const Ray &ray, SurfaceInteraction *isect);
 		bool IntersectP(const Ray &ray);
-		bool Intersect(const Ray &ray, std::vector<Point3f> triangle, SurfaceInteraction *isect);
+		bool Intersect(const Ray &ray, std::vector<Point3f> triangle, std::vector<Normal3f> normal, SurfaceInteraction *isect);
 		bool IntersectP(const Ray &ray, std::vector<Point3f> triangle);
 	private:
 		std::vector<std::vector<Point3f>> triangles;
+		std::vector<std::vector<Normal3f>> normals;
 		const Transform * objToWorld;
-		bool allCanIntersect;
 	};
 
 	// GridAccel Declarations
