@@ -175,103 +175,88 @@ Heightfield::GridAccel::GridAccel(Heightfield* hf)
 		invWidth[axis] = (width[axis] == 0.f) ? 0.f : 1.f / width[axis];
 	}
 
-	int nv = nVoxels[0] * nVoxels[1] * nVoxels[2];
-
-	voxels = AllocAligned<Voxel *>(nv);
-	memset(voxels, 0, nv * sizeof(Voxel *));
-
-
-	std::map<int, Normal3f> normalMap;
-	for (int i = 0; i < nVoxels[0]; i++) {
-		for (int j = 0; j < nVoxels[1]; j++) {
-			int index = offset(i, j, 0);
-#define VERT(x, y) ((x) + (y)*this->heightfield->nx)
-			int bottomLeftIndex = VERT(i, j);
-			Point3f bottomLeft = Point3f(
-				1.0f / nVoxels[0] * i,
-				1.0f / nVoxels[1] * j,
-				heightfield->z[bottomLeftIndex]);
-			int bottomRightIndex = VERT(i + 1, j);
-			Point3f bottomRight = Point3f(
-				1.0f / nVoxels[0] * (i + 1),
-				1.0f / nVoxels[1] * j,
-				heightfield->z[bottomRightIndex]);
-			int topLeftIndex = VERT(i, j + 1);
-			Point3f topLeft = Point3f(
-				1.0f / nVoxels[0] * i,
-				1.0f / nVoxels[1] * (j + 1),
-				heightfield->z[topLeftIndex]);
-			int topRightIndex = VERT(i + 1, j + 1);
-			Point3f topRight = Point3f(
-				1.0f / nVoxels[0] * (i + 1),
-				1.0f / nVoxels[1] * (j + 1),
-				heightfield->z[topRightIndex]);
-#undef VERT
-
-			Normal3f leftNormal = Normal3f(Normalize(Cross(topRight - bottomLeft, topLeft - bottomLeft)));
-			Normal3f rightNormal = Normal3f(Normalize(Cross(bottomRight - bottomLeft, topRight - bottomLeft)));
-			normalMap[bottomLeftIndex] += leftNormal;
-			normalMap[bottomLeftIndex] += rightNormal;
-			normalMap[bottomRightIndex] += rightNormal;
-			normalMap[topLeftIndex] += leftNormal;
-			normalMap[topRightIndex] += leftNormal;
-			normalMap[topRightIndex] += rightNormal;
+	int vertexNum = hf->nx * hf->ny;
+	vertexPositions = AllocAligned<Point3f>(vertexNum);
+	normals = AllocAligned<Normal3f>(vertexNum);
+	memset(vertexPositions, 0, vertexNum * sizeof(Point3f));
+	memset(normals, 0, vertexNum * sizeof(Normal3f));
+	float invNVoxels[2] = { 1.0f / nVoxels[0],1.0f / nVoxels[1] };
+	// Fill in vertex positions
+	for (int i = 0; i < hf->nx; i++) {
+		for (int j = 0; j < hf->ny; j++) {
+			int vertexIndex = vertexOffset(i, j);
+			vertexPositions[vertexIndex] = Point3f(
+				invNVoxels[0] * i,
+				invNVoxels[1] * j,
+				heightfield->z[vertexIndex]);
 		}
 	}
 
-	for (auto& normalPair : normalMap) {
-		normalPair.second = Normalize(normalPair.second);
+	// Fill in normals
+	for (int i = 0; i < hf->nx - 1; i++) {
+		for (int j = 0; j < hf->ny - 1; j++) {
+			int bottomLeftIndex = vertexOffset(i, j);
+			Point3f bottomLeft = vertexPositions[bottomLeftIndex];
+			int bottomRightIndex = vertexOffset(i + 1, j);
+			Point3f bottomRight = vertexPositions[bottomRightIndex];
+			int topLeftIndex = vertexOffset(i, j + 1);
+			Point3f topLeft = vertexPositions[topLeftIndex];
+			int topRightIndex = vertexOffset(i + 1, j + 1);
+			Point3f topRight = vertexPositions[topRightIndex];
+
+			Normal3f leftNormal = Normal3f(Normalize(Cross(topRight - bottomLeft, topLeft - bottomLeft)));
+			Normal3f rightNormal = Normal3f(Normalize(Cross(bottomRight - bottomLeft, topRight - bottomLeft)));
+			normals[bottomLeftIndex] += leftNormal;
+			normals[bottomLeftIndex] += rightNormal;
+			normals[bottomRightIndex] += rightNormal;
+			normals[topLeftIndex] += leftNormal;
+			normals[topRightIndex] += leftNormal;
+			normals[topRightIndex] += rightNormal;
+		}
 	}
 
+
+	for (int i = 0; i < vertexNum; i++) {
+		normals[i] = Normalize(normals[i]);
+	}
+
+	int nv = nVoxels[0] * nVoxels[1] * nVoxels[2];
+	voxels = AllocAligned<Voxel *>(nv);
+	memset(voxels, 0, nv * sizeof(Voxel *));
+	// Put triangles into each cell
 	for (int i = 0; i < nVoxels[0]; i++) {
 		for (int j = 0; j < nVoxels[1]; j++) {
-			int index = offset(i, j, 0);
-#define VERT(x, y) ((x) + (y)*this->heightfield->nx)
-			int bottomLeftIndex = VERT(i, j);
-			Point3f bottomLeft = Point3f(
-				1.0f / nVoxels[0] * i,
-				1.0f / nVoxels[1] * j,
-				heightfield->z[bottomLeftIndex]);
-			int bottomRightIndex = VERT(i + 1, j);
-			Point3f bottomRight = Point3f(
-				1.0f / nVoxels[0] * (i + 1),
-				1.0f / nVoxels[1] * j,
-				heightfield->z[bottomRightIndex]);
-			int topLeftIndex = VERT(i, j + 1);
-			Point3f topLeft = Point3f(
-				1.0f / nVoxels[0] * i,
-				1.0f / nVoxels[1] * (j + 1),
-				heightfield->z[topLeftIndex]);
-			int topRightIndex = VERT(i + 1, j + 1);
-			Point3f topRight = Point3f(
-				1.0f / nVoxels[0] * (i + 1),
-				1.0f / nVoxels[1] * (j + 1),
-				heightfield->z[topRightIndex]);
-#undef VERT
+			int bottomLeftIndex = vertexOffset(i, j);
+			int bottomRightIndex = vertexOffset(i + 1, j);
+			int topLeftIndex = vertexOffset(i, j + 1);
+			int topRightIndex = vertexOffset(i + 1, j + 1);
+
 			std::vector<Point3f> triangle1 =
 			{
-				bottomLeft,
-				topLeft,
-				topRight
+				vertexPositions[bottomLeftIndex],
+				vertexPositions[topLeftIndex],
+				vertexPositions[topRightIndex]
 			};
 			std::vector<Normal3f> normal1 =
 			{
-				normalMap[bottomLeftIndex],
-				normalMap[topLeftIndex],
-				normalMap[topRightIndex],
+				normals[bottomLeftIndex],
+				normals[topLeftIndex],
+				normals[topRightIndex],
 			};
 			std::vector<Point3f> triangle2 =
 			{
-				bottomLeft,
-				topRight,
-				bottomRight,
+				vertexPositions[bottomLeftIndex],
+				vertexPositions[topRightIndex],
+				vertexPositions[bottomRightIndex],
 			};
 			std::vector<Normal3f> normal2 =
 			{
-				normalMap[bottomLeftIndex],
-				normalMap[topRightIndex],
-				normalMap[bottomRightIndex],
+				normals[bottomLeftIndex],
+				normals[topRightIndex],
+				normals[bottomRightIndex],
 			};
+
+			int index = offset(i, j, 0);
 			if (!voxels[index]) {
 				// Allocate new voxel and store primitive in it
 				voxels[index] = voxelArena.Alloc<Voxel>();

@@ -106,12 +106,17 @@ class Heightfield : public Shape {
 		inline int offset(int x, int y, int z) const {
 			return z * nVoxels[0] * nVoxels[1] + y * nVoxels[0] + x;
 		}
+		inline int vertexOffset(int x, int y) const {
+			return x + y * heightfield->nx;
+		}
 
 		int nVoxels[3];
 		Heightfield* heightfield;
 		Bounds3f bounds;
 		Vector3f width, invWidth;
 		Voxel **voxels;
+		Point3f *vertexPositions;
+		Normal3f *normals;
 		MemoryArena voxelArena;
 	};
 
