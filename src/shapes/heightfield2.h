@@ -61,27 +61,28 @@ class Heightfield : public Shape {
 
 	struct Voxel {
 		// Voxel Public Methods
-		uint32_t size() const { return triangles.size(); }
+		uint32_t size() const { return 2; }
 		Voxel() { }
-		Voxel(const Transform * objToWorld, 
-			std::vector<Point3f> op,
-			std::vector<Normal3f> nm) : 
-			objToWorld (objToWorld) {
-			triangles.push_back(op);
-			normals.push_back(nm);
-		}
-		void AddTriangle(std::vector<Point3f> prim, std::vector<Normal3f> nm) {
-			triangles.push_back(prim);
-			normals.push_back(nm);
+		Voxel(const Transform * objToWorld,
+			Point3f* vp,
+			Normal3f* nm) :
+			objToWorld (objToWorld) { 
+			memcpy(vertexPositions, vp, 4 * sizeof(Point3f));
+			memcpy(normals, nm, 4 * sizeof(Normal3f));
 		}
 		bool Intersect(const Ray &ray, Float* tHit, SurfaceInteraction *isect);
 		bool IntersectP(const Ray &ray);
-		bool Intersect(const Ray &ray, Float* tHit, std::vector<Point3f> triangle, std::vector<Normal3f> normal, SurfaceInteraction *isect);
-		bool IntersectP(const Ray &ray, std::vector<Point3f> triangle);
+		bool Intersect(const Ray &ray, Float* tHit, const int vertexIndex[3], SurfaceInteraction *isect);
+		bool IntersectP(const Ray &ray, const int vertexIndex[3]);
 	private:
-		std::vector<std::vector<Point3f>> triangles;
-		std::vector<std::vector<Normal3f>> normals;
+		Point3f vertexPositions[4];
+		Normal3f normals[4];
 		const Transform * objToWorld;
+		constexpr static int kTriangleIndex[2][3] = 
+		{
+			{0, 2, 3},
+			{0, 3, 1}
+		};
 	};
 
 	// GridAccel Declarations

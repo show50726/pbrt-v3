@@ -47,12 +47,11 @@ bool Heightfield::Voxel::Intersect(
 	const Ray &ray, 
 	Float* tHit,
 	SurfaceInteraction *isect) {
-	for (size_t i = 0; i < triangles.size(); ++i) {
+	for (size_t i = 0; i < size(); ++i) {
 		if (!Intersect(
 			ray, 
 			tHit,
-			triangles[i], 
-			normals[i],
+			kTriangleIndex[i],
 			isect))
 			continue;
 
@@ -64,12 +63,14 @@ bool Heightfield::Voxel::Intersect(
 bool Heightfield::Voxel::Intersect(
 	const Ray &ray, 
 	Float* tHit,
-	std::vector<Point3f> triangle, 
-	std::vector<Normal3f> normal,
+	const int vertexIndex[3],
 	SurfaceInteraction *isect) {
-	const Point3f &p1 = triangle[0];
-	const Point3f &p2 = triangle[1];
-	const Point3f &p3 = triangle[2];
+	const Point3f &p1 = vertexPositions[*vertexIndex];
+	const Point3f &p2 = vertexPositions[*(vertexIndex + 1)];
+	const Point3f &p3 = vertexPositions[*(vertexIndex + 2)];
+	const Normal3f & n1 = normals[*vertexIndex];
+	const Normal3f & n2 = normals[*(vertexIndex + 1)];
+	const Normal3f & n3 = normals[*(vertexIndex + 2)];
 	Vector3f e1 = p2 - p1;
 	Vector3f e2 = p3 - p1;
 	Vector3f s1 = Cross(ray.d, e2);
@@ -99,7 +100,7 @@ bool Heightfield::Voxel::Intersect(
 	if (t < 0 || t > ray.tMax || t > *tHit)
 		return false;
 
-	Normal3f interpolatedNormal = Normalize(normal[0] * b0 + normal[1] * b1 + normal[2] * b2);
+	Normal3f interpolatedNormal = Normalize(n1 * b0 + n2 * b1 + n3 * b2);
 
 	// Calculate tangent and bitangent
 	Vector3f dpdu, dpdv;
@@ -112,8 +113,8 @@ bool Heightfield::Voxel::Intersect(
 	float du2 = p2.x - p3.x;
 	float dv1 = p1.y - p3.y;
 	float dv2 = p2.y - p3.y;
-	Normal3f dn1 = normal[0] - normal[2];
-	Normal3f dn2 = normal[1] - normal[2];
+	Normal3f dn1 = n1 - n3;
+	Normal3f dn2 = n2 - n3;
 	float determinant = du1 * dv2 - dv1 * du2;
 	if (determinant == 0.f)
 		dndu = dndv = Normal3f(0, 0, 0);
@@ -145,16 +146,15 @@ bool Heightfield::Voxel::Intersect(
 
 bool Heightfield::Voxel::IntersectP(
 	const Ray &ray, 
-	std::vector<Point3f> triangle) {
+	const int vertexIndex[3]) {
 	return true;
 }
 
 bool Heightfield::Voxel::IntersectP(const Ray &ray) {
-	for (size_t i = 0; i < triangles.size(); ++i) {
-		SurfaceInteraction surf;
+	for (size_t i = 0; i < size(); ++i) {
 		if (!IntersectP(
 			ray,
-			triangles[i]))
+			kTriangleIndex[i]))
 			continue;
 
 		return true;
@@ -180,7 +180,7 @@ Heightfield::GridAccel::GridAccel(Heightfield* hf)
 	normals = AllocAligned<Normal3f>(vertexNum);
 	memset(vertexPositions, 0, vertexNum * sizeof(Point3f));
 	memset(normals, 0, vertexNum * sizeof(Normal3f));
-	float invNVoxels[2] = { 1.0f / nVoxels[0],1.0f / nVoxels[1] };
+	float invNVoxels[2] = { 1.0f / nVoxels[0], 1.0f / nVoxels[1] };
 	// Fill in vertex positions
 	for (int i = 0; i < hf->nx; i++) {
 		for (int j = 0; j < hf->ny; j++) {
@@ -231,46 +231,25 @@ Heightfield::GridAccel::GridAccel(Heightfield* hf)
 			int topLeftIndex = vertexOffset(i, j + 1);
 			int topRightIndex = vertexOffset(i + 1, j + 1);
 
-			std::vector<Point3f> triangle1 =
-			{
+			Point3f vp[4] = {
 				vertexPositions[bottomLeftIndex],
+				vertexPositions[bottomRightIndex],
 				vertexPositions[topLeftIndex],
 				vertexPositions[topRightIndex]
 			};
-			std::vector<Normal3f> normal1 =
+			Normal3f nm[4] =
 			{
 				normals[bottomLeftIndex],
+				normals[bottomRightIndex],
 				normals[topLeftIndex],
 				normals[topRightIndex],
 			};
-			std::vector<Point3f> triangle2 =
-			{
-				vertexPositions[bottomLeftIndex],
-				vertexPositions[topRightIndex],
-				vertexPositions[bottomRightIndex],
-			};
-			std::vector<Normal3f> normal2 =
-			{
-				normals[bottomLeftIndex],
-				normals[topRightIndex],
-				normals[bottomRightIndex],
-			};
 
 			int index = offset(i, j, 0);
-			if (!voxels[index]) {
-				// Allocate new voxel and store primitive in it
-				voxels[index] = voxelArena.Alloc<Voxel>();
-				*voxels[index] = Voxel(
-					heightfield->ObjectToWorld, 
-					std::move(triangle1),
-					std::move(normal1));
-				(*voxels[index]).AddTriangle(std::move(triangle2), std::move(normal2));
-			}
-			else {
-				// Add primitive to already-allocated voxel
-				voxels[index]->AddTriangle(std::move(triangle1), std::move(normal1));
-				voxels[index]->AddTriangle(std::move(triangle2), std::move(normal2));
-			}
+			// Allocate new voxel and store primitive in it
+			voxels[index] = voxelArena.Alloc<Voxel>();
+			*voxels[index] = Voxel(
+				heightfield->ObjectToWorld, vp, nm);
 		}
 	}
 }
@@ -279,6 +258,8 @@ Heightfield::GridAccel::~GridAccel() {
 	for (int i = 0; i < nVoxels[0] * nVoxels[1] * nVoxels[2]; ++i)
 		if (voxels[i]) voxels[i]->~Voxel();
 	FreeAligned(voxels);
+	FreeAligned(vertexPositions);
+	FreeAligned(normals);
 }
 
 bool Heightfield::GridAccel::Intersect(
