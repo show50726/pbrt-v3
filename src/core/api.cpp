@@ -43,6 +43,7 @@
 // API Additional Headers
 #include "accelerators/bvh.h"
 #include "accelerators/kdtreeaccel.h"
+#include "cameras/custom_realistic.h"
 #include "cameras/environment.h"
 #include "cameras/orthographic.h"
 #include "cameras/perspective.h"
@@ -804,6 +805,9 @@ Camera *MakeCamera(const std::string &name, const ParamSet &paramSet,
     else if (name == "realistic")
         camera = CreateRealisticCamera(paramSet, animatedCam2World, film,
                                        mediumInterface.outside);
+	else if (name == "custom_realistic")
+		camera = CreateCutomRealisticCamera(paramSet, animatedCam2World, film,
+			mediumInterface.outside);
     else if (name == "environment")
         camera = CreateEnvironmentCamera(paramSet, animatedCam2World, film,
                                          mediumInterface.outside);
