@@ -16,27 +16,29 @@ static bool _IntersectLensTest(
 	Float* t,
 	Normal3f* normal) {
 	// Transform the ray into lens space
-	Point3f curvatureCenter = ray.o - Vector3f(0, 0, curvatureCenterZ);
+	Point3f newRayOrigin = ray.o - Vector3f(0, 0, curvatureCenterZ);
 	Float A = ray.d.x * ray.d.x + ray.d.y * ray.d.y + ray.d.z * ray.d.z;
-	Float B = 2 * (ray.d.x * curvatureCenter.x + ray.d.y * curvatureCenter.y + ray.d.z * curvatureCenter.z);
-	Float C = curvatureCenter.x * curvatureCenter.x
-		+ curvatureCenter.y * curvatureCenter.y
-		+ curvatureCenter.z * curvatureCenter.z
+	Float B = 2 * (ray.d.x * newRayOrigin.x + ray.d.y * newRayOrigin.y + ray.d.z * newRayOrigin.z);
+	Float C = newRayOrigin.x * newRayOrigin.x
+		+ newRayOrigin.y * newRayOrigin.y
+		+ newRayOrigin.z * newRayOrigin.z
 		- curvatureRadius * curvatureRadius;
 	Float t0, t1;
-	if (!Quadratic(A, B, C, &t0, &t1))
+	if (!Quadratic(A, B, C, &t0, &t1)) {
 		return false;
+	}
 
 	bool useCloserT = (ray.d.z > 0) ^ (curvatureRadius < 0);
 	*t = useCloserT ? std::min(t0, t1) : std::max(t0, t1);
-	if (*t < 0) return false;
+	if (*t < 0) 
+		return false;
 
 	Point3f pHit = ray(*t);
 	Float sqrDistance = pHit.x * pHit.x + pHit.y * pHit.y;
 	if (sqrDistance > apertureRadius * apertureRadius)
 		return false;
 
-	*normal = Normal3f(Vector3f(ray.o + *t * ray.d + curvatureCenter));
+	*normal = Normal3f(Vector3f(newRayOrigin + *t * ray.d));
 	*normal = Faceforward(Normalize(*normal), -ray.d);
 	return true;
 }
@@ -75,10 +77,11 @@ std::vector<CustomRealisticCamera::LensElementInterface> CustomRealisticCamera::
 	for (int i = 0; i < lensData.size(); i += 4) {
 		// The lens units in dat files are measured in mm (millimeters), but in pbrt the unit is m (meters). 
 		LensElementInterface lensElement;
-		lensElement.apertureRadius = 0.01f * lensData[i];
+		lensElement.curvatureRadius = 0.01f * lensData[i];
 		lensElement.axPos = 0.01f * lensData[i + 1];
 		lensElement.nd = lensData[i + 2];
 		lensElement.apertureRadius = 0.01f * 0.5f * lensData[i + 3];
+		result.push_back(lensElement);
 	}
 
 	return result;
@@ -90,13 +93,12 @@ CustomRealisticCamera::CustomRealisticCamera(const AnimatedTransform &cam2world,
 				 float filmdistance, float aperture_diameter, std::string specfile, 
 				 float filmdiag, Film *f, const Medium *medium)
 	: Camera(cam2world, sopen, sclose, f, medium), shutter_opon_(sopen), shutter_close_(sclose),
-	film_distance_(filmdistance), aperture_radius_(aperture_diameter * 0.001f * 0.5f), film_diag_(filmdiag),
+	film_distance_(filmdistance * 0.01f), aperture_radius_(aperture_diameter * 0.01f * 0.5f), film_diag_(filmdiag),
 	lens_system_(std::move(_ReadLensFromFile(specfile)))
 {
-
 }
 
-Float CustomRealisticCamera::_CalculateTotalThickness() {
+Float CustomRealisticCamera::_CalculateTotalThickness() const {
 	Float total = 0;
 	for (int i = 0; i < lens_system_.size(); i++) {
 		total += lens_system_[i].axPos;
@@ -108,11 +110,13 @@ Float CustomRealisticCamera::_CalculateTotalThickness() {
 bool CustomRealisticCamera::_CastRayFromFilm(
 	/* camera space */ const Ray& input, 
 	/* camera space */ Ray* output) const {
-	Float currentZ = film_distance_;
+	Float currentZ = _CalculateTotalThickness();
 	Ray currentRay = input;
-	
 	for (int i = lens_system_.size() - 1; i >= 0; i--) {
 		const LensElementInterface& lens = lens_system_[i];
+
+		currentZ += lens.axPos;
+
 		bool isStop = (lens.curvatureRadius == 0);
 		Float t;
 		Normal3f normal;
@@ -128,19 +132,23 @@ bool CustomRealisticCamera::_CastRayFromFilm(
 				lens.curvatureRadius,
 				lens.apertureRadius,
 				&t,
-				&normal))
+				&normal)) {
 				return false;
+			}
 			currentRay.o = currentRay(t);
 		}
 		CHECK_GE(t, 0);
 
 		if (!isStop)
 		{
-			Vector3f intoLens = _CalculateRefractedRay(currentRay.d, normal, 1.0, lens.nd);
-			currentRay.d = intoLens;
+			Float n1 = lens_system_[i].nd;
+			Float n2 = (i > 0 && lens_system_[i - 1].nd != 0)
+				? lens_system_[i - 1].nd
+				: 1;
+			Vector3f refracted = _CalculateRefractedRay(currentRay.d, normal, n1, n2);
+			currentRay.d = refracted;
 		}
 
-		currentZ += lens.axPos;
 	}
 
 	if (output != nullptr) {
@@ -157,25 +165,25 @@ float CustomRealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) c
 	// 3. If the ray is blocked, fill the weight with 0, 
 	//    or fill the cos term to the weight
 
+	Float totalThickness = _CalculateTotalThickness();
 	// Convert to sample to [0, 1]
 	Point2f s(sample.pFilm.x / film->fullResolution.x,
 		sample.pFilm.y / film->fullResolution.y);
 	// Map the [0, 1] from screen to film
 	Point2f pFilm = film->GetPhysicalExtent().Lerp(s);
-	Point3f filmPoint = Point3f(pFilm.x, pFilm.y, 0.0f);
-
+	Point3f filmPoint = Point3f(pFilm.x, pFilm.y, -film_distance_ - totalThickness);
 	// Sample from the exit pupil
 	Bounds3f exitPupilBounds = Bounds3f(
-		/* pMin */ Point3f(-aperture_radius_, -aperture_radius_, film_distance_),
-		/* pMax */ Point3f(aperture_radius_, aperture_radius_, film_distance_));
+		/* pMin */ Point3f(-lens_system_.back().apertureRadius, -lens_system_.back().apertureRadius, -totalThickness),
+		/* pMax */ Point3f(lens_system_.back().apertureRadius, lens_system_.back().apertureRadius, -totalThickness));
 	Point3f exitPupilPoint = exitPupilBounds.Lerp(Point3f(sample.pLens.x, sample.pLens.y, 0.0f));
 	
 	Ray currentRay(filmPoint, exitPupilPoint - filmPoint, Infinity, Lerp(sample.time, shutter_close_, shutter_opon_));
+	// std::cout << currentRay.d.x << " " << currentRay.d.y << " " << currentRay.d.z << std::endl;
 	if (!_CastRayFromFilm(currentRay, ray)) {
 		return 0;
 	}
 
-	
 	*ray = CameraToWorld(*ray);
 	ray->d = Normalize(ray->d);
 	ray->medium = medium;

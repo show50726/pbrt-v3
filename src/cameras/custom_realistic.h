@@ -49,7 +49,7 @@ private:
 		/* camera space */ const Ray& input, 
 		/* camera space */ Ray* output) const;
 
-	Float _CalculateTotalThickness();
+	Float _CalculateTotalThickness() const;
 	
 	std::vector<LensElementInterface> lens_system_;
 	Float shutter_opon_;
