@@ -110,12 +110,13 @@ Float CustomRealisticCamera::_CalculateTotalThickness() const {
 bool CustomRealisticCamera::_CastRayFromFilm(
 	/* camera space */ const Ray& input, 
 	/* camera space */ Ray* output) const {
-	Float currentZ = _CalculateTotalThickness();
-	Ray currentRay = input;
+	static const Transform CameraToLens = Scale(1, 1, -1);
+	Float currentZ = -_CalculateTotalThickness();
+	Ray currentRay = CameraToLens(input);
 	for (int i = lens_system_.size() - 1; i >= 0; i--) {
 		const LensElementInterface& lens = lens_system_[i];
 
-		currentZ += lens.axPos;
+		currentZ -= lens.axPos;
 
 		bool isStop = (lens.curvatureRadius == 0);
 		Float t;
@@ -173,28 +174,33 @@ float CustomRealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) c
 		sample.pFilm.y / film->fullResolution.y);
 	// Map the [0, 1] from screen to film
 	Point2f pFilm = film->GetPhysicalExtent().Lerp(s);
+	//std::cout << "s: " << sample.pFilm << std::endl;
 	Point3f filmPoint = Point3f(pFilm.x, pFilm.y, -film_distance_ - totalThickness);
+	//std::cout << filmPoint * 1000 << std::endl;
 	// Sample from the exit pupil
-	Bounds3f exitPupilBounds = Bounds3f(
-		/* pMin */ Point3f(-lens_system_.back().apertureRadius, -lens_system_.back().apertureRadius, -totalThickness),
-		/* pMax */ Point3f(lens_system_.back().apertureRadius, lens_system_.back().apertureRadius, -totalThickness));
-	Point3f exitPupilPoint = exitPupilBounds.Lerp(Point3f(sample.pLens.x, sample.pLens.y, 0.0f));
+
+	// Use first lens as exit pupil
+	Float exitPupilRadius = lens_system_.back().apertureRadius;
+	Point2f sampleOnDisk = exitPupilRadius * ConcentricSampleDisk(sample.pLens);
+	Point3f exitPupilPoint = Point3f(sampleOnDisk.x, sampleOnDisk.y, -totalThickness);
 	
-	Ray currentRay(filmPoint, exitPupilPoint - filmPoint, Infinity, Lerp(sample.time, shutter_close_, shutter_opon_));
+	// Camera space ray
+	Ray currentRay(filmPoint, exitPupilPoint - filmPoint, Infinity, 1.0f);
 	// std::cout << currentRay.d.x << " " << currentRay.d.y << " " << currentRay.d.z << std::endl;
 	if (!_CastRayFromFilm(currentRay, ray)) {
 		return 0;
 	}
 
-	*ray = CameraToWorld(*ray);
+	*ray = CameraToWorld(currentRay);
 	ray->d = Normalize(ray->d);
 	ray->medium = medium;
 
 	// Calculate the weight of the ray
 	Float cosTheta = Normalize(currentRay.d).z;
 	Float cos4Theta = (cosTheta * cosTheta) * (cosTheta * cosTheta);
-	
-	return cos4Theta / (film_distance_ * film_distance_);
+	Float sampleArea = 4.0f * Pi * exitPupilRadius * exitPupilRadius;
+
+	return cos4Theta * sampleArea / (film_distance_ * film_distance_);
 }
 
 
