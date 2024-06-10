@@ -3,6 +3,7 @@
 
 
 #include "core/parser.h"
+#include "core/sampling.h"
 #include "floatfile.h"
 
 namespace pbrt {
@@ -24,9 +25,8 @@ static bool _IntersectLensTest(
 		+ newRayOrigin.z * newRayOrigin.z
 		- curvatureRadius * curvatureRadius;
 	Float t0, t1;
-	if (!Quadratic(A, B, C, &t0, &t1)) {
+	if (!Quadratic(A, B, C, &t0, &t1))
 		return false;
-	}
 
 	bool useCloserT = (ray.d.z > 0) ^ (curvatureRadius < 0);
 	*t = useCloserT ? std::min(t0, t1) : std::max(t0, t1);
@@ -50,7 +50,7 @@ static Vector3f _CalculateRefractedRay(
 	// Heckber's method
 	CHECK_NE(n2, 0);
 	Float n = n1 / n2;
-	Float c1 = -Dot(incidentDirection, normal);
+	Float c1 = Dot(incidentDirection, normal);
 	Float c2 = std::sqrt(1.0f - n * n*(1.0f - c1 * c1));
 	return n * incidentDirection + (Vector3f)normal * (n * c1 - c2);
 }
@@ -77,10 +77,10 @@ std::vector<CustomRealisticCamera::LensElementInterface> CustomRealisticCamera::
 	for (int i = 0; i < lensData.size(); i += 4) {
 		// The lens units in dat files are measured in mm (millimeters), but in pbrt the unit is m (meters). 
 		LensElementInterface lensElement;
-		lensElement.curvatureRadius = 0.01f * lensData[i];
-		lensElement.axPos = 0.01f * lensData[i + 1];
+		lensElement.curvatureRadius = 0.001f * lensData[i];
+		lensElement.axPos = 0.001f * lensData[i + 1];
 		lensElement.nd = lensData[i + 2];
-		lensElement.apertureRadius = 0.01f * 0.5f * lensData[i + 3];
+		lensElement.apertureRadius = 0.001f * 0.5f * lensData[i + 3];
 		result.push_back(lensElement);
 	}
 
@@ -93,7 +93,7 @@ CustomRealisticCamera::CustomRealisticCamera(const AnimatedTransform &cam2world,
 				 float filmdistance, float aperture_diameter, std::string specfile, 
 				 float filmdiag, Film *f, const Medium *medium)
 	: Camera(cam2world, sopen, sclose, f, medium), shutter_opon_(sopen), shutter_close_(sclose),
-	film_distance_(filmdistance * 0.01f), aperture_radius_(aperture_diameter * 0.01f * 0.5f), film_diag_(filmdiag),
+	film_distance_(filmdistance * 0.001f), aperture_radius_(aperture_diameter * 0.001f * 0.5f), film_diag_(filmdiag * 0.001f),
 	lens_system_(std::move(_ReadLensFromFile(specfile)))
 {
 }
@@ -123,6 +123,8 @@ bool CustomRealisticCamera::_CastRayFromFilm(
 		if (isStop) {
 			// Aperture Stop.
 			// Propergate the ray without refraction
+			if (currentRay.d.z >= 0.0f)
+				return false;
 			t = (currentZ - currentRay.o.z) / currentRay.d.z;
 		}
 		else {
