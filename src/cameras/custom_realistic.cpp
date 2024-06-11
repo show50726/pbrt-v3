@@ -160,6 +160,13 @@ bool CustomRealisticCamera::_CastRayFromFilm(
 	return true;
 }
 
+Bounds2f GetPhysicalExtent(const Film& film, Float filmdiag) {
+	Float aspect = (Float)film.fullResolution.y / (Float)film.fullResolution.x;
+	Float x = std::sqrt(filmdiag * filmdiag / (1 + aspect * aspect));
+	Float y = aspect * x;
+	return Bounds2f(Point2f(-x / 2, -y / 2), Point2f(x / 2, y / 2));
+}
+
 float CustomRealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const {
 	ProfilePhase prof(Prof::GenerateCameraRay);
 
@@ -173,7 +180,7 @@ float CustomRealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) c
 	Point2f s(sample.pFilm.x / film->fullResolution.x,
 		sample.pFilm.y / film->fullResolution.y);
 	// Map the [0, 1] from screen to film
-	Point2f pFilm = film->GetPhysicalExtent().Lerp(s);
+	Point2f pFilm = GetPhysicalExtent(*film, film_diag_).Lerp(s);
 	//std::cout << "s: " << sample.pFilm << std::endl;
 	Point3f filmPoint = Point3f(pFilm.x, pFilm.y, -film_distance_ - totalThickness);
 	//std::cout << filmPoint * 1000 << std::endl;
@@ -191,16 +198,16 @@ float CustomRealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) c
 		return 0;
 	}
 
-	*ray = CameraToWorld(currentRay);
+	*ray = CameraToWorld(*ray);
 	ray->d = Normalize(ray->d);
 	ray->medium = medium;
 
 	// Calculate the weight of the ray
 	Float cosTheta = Normalize(currentRay.d).z;
 	Float cos4Theta = (cosTheta * cosTheta) * (cosTheta * cosTheta);
-	Float sampleArea = 4.0f * Pi * exitPupilRadius * exitPupilRadius;
+	Float sampleArea = Pi * exitPupilRadius * exitPupilRadius;
 
-	return cos4Theta * sampleArea / (film_distance_ * film_distance_);
+	return cos4Theta / (film_distance_ * film_distance_);
 }
 
 
