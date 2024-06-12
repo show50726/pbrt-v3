@@ -33,11 +33,6 @@ static bool _IntersectLensTest(
 	if (*t < 0) 
 		return false;
 
-	Point3f pHit = ray(*t);
-	Float sqrDistance = pHit.x * pHit.x + pHit.y * pHit.y;
-	if (sqrDistance > apertureRadius * apertureRadius)
-		return false;
-
 	*normal = Normal3f(Vector3f(newRayOrigin + *t * ray.d));
 	*normal = Faceforward(Normalize(*normal), -ray.d);
 	return true;
@@ -111,7 +106,7 @@ bool CustomRealisticCamera::_CastRayFromFilm(
 	/* camera space */ const Ray& input, 
 	/* camera space */ Ray* output) const {
 	static const Transform CameraToLens = Scale(1, 1, -1);
-	Float currentZ = -_CalculateTotalThickness();
+	Float currentZ = -film_distance_;
 	Ray currentRay = CameraToLens(input);
 	for (int i = lens_system_.size() - 1; i >= 0; i--) {
 		const LensElementInterface& lens = lens_system_[i];
@@ -138,9 +133,13 @@ bool CustomRealisticCamera::_CastRayFromFilm(
 				&normal)) {
 				return false;
 			}
-			currentRay.o = currentRay(t);
 		}
 		CHECK_GE(t, 0);
+		Point3f pHit = currentRay(t);
+		Float r2 = pHit.x * pHit.x + pHit.y * pHit.y;
+		if (r2 > lens_system_[i].apertureRadius * lens_system_[i].apertureRadius) 
+			return false;
+		currentRay.o = pHit;
 
 		if (!isStop)
 		{
@@ -155,7 +154,8 @@ bool CustomRealisticCamera::_CastRayFromFilm(
 	}
 
 	if (output != nullptr) {
-		*output = currentRay;
+		static const Transform LensToCamera = Scale(1, 1, -1);
+		*output = LensToCamera(currentRay);
 	}
 	return true;
 }
@@ -182,14 +182,14 @@ float CustomRealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) c
 	// Map the [0, 1] from screen to film
 	Point2f pFilm = GetPhysicalExtent(*film, film_diag_).Lerp(s);
 	//std::cout << "s: " << sample.pFilm << std::endl;
-	Point3f filmPoint = Point3f(pFilm.x, pFilm.y, -film_distance_ - totalThickness);
+	Point3f filmPoint = Point3f(pFilm.x, pFilm.y, 0);
 	//std::cout << filmPoint * 1000 << std::endl;
 	// Sample from the exit pupil
 
 	// Use first lens as exit pupil
 	Float exitPupilRadius = lens_system_.back().apertureRadius;
 	Point2f sampleOnDisk = exitPupilRadius * ConcentricSampleDisk(sample.pLens);
-	Point3f exitPupilPoint = Point3f(sampleOnDisk.x, sampleOnDisk.y, -totalThickness);
+	Point3f exitPupilPoint = Point3f(sampleOnDisk.x, sampleOnDisk.y, film_distance_);
 	
 	// Camera space ray
 	Ray currentRay(filmPoint, exitPupilPoint - filmPoint, Infinity, 1.0f);
@@ -198,6 +198,7 @@ float CustomRealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) c
 		return 0;
 	}
 
+	ray->o -= Vector3f(0, 0, totalThickness + film_distance_);
 	*ray = CameraToWorld(*ray);
 	ray->d = Normalize(ray->d);
 	ray->medium = medium;
@@ -207,7 +208,7 @@ float CustomRealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) c
 	Float cos4Theta = (cosTheta * cosTheta) * (cosTheta * cosTheta);
 	Float sampleArea = Pi * exitPupilRadius * exitPupilRadius;
 
-	return cos4Theta / (film_distance_ * film_distance_);
+	return cos4Theta * sampleArea  / (film_distance_ * film_distance_);
 }
 
 
