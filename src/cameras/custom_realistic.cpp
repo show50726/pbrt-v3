@@ -42,12 +42,12 @@ static Vector3f _CalculateRefractedRay(
 	Vector3f incidentDirection,
 	Normal3f normal,
 	Float n1, Float n2) {
-	// Heckber's method
+	// Heckbert's method
 	CHECK_NE(n2, 0);
 	Float n = n1 / n2;
 	Float c1 = Dot(incidentDirection, normal);
 	Float c2 = std::sqrt(1.0f - n * n*(1.0f - c1 * c1));
-	return n * incidentDirection + (Vector3f)normal * (n * c1 - c2);
+	return n * -incidentDirection + (Vector3f)normal * (n * c1 - c2);
 }
 
 } // namespace
@@ -150,9 +150,8 @@ bool CustomRealisticCamera::_CastRayFromFilm(
 			Float n2 = (i > 0 && lens_system_[i - 1].nd != 0)
 				? lens_system_[i - 1].nd
 				: 1;
-			Vector3f refracted;
-			Refract(Normalize(-currentRay.d), normal, n1 / n2, &refracted);
-			
+			Vector3f refracted = _CalculateRefractedRay(Normalize(-currentRay.d), normal, n1, n2);
+
 			currentRay.d = refracted;
 		}
 
