@@ -200,7 +200,7 @@ float CustomRealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) c
 		return 0;
 	}
 
-	ray->o -= Vector3f(0, 0, (totalThickness + film_distance_));
+	ray->o -= Vector3f(0, 0, totalThickness + film_distance_);
 	*ray = CameraToWorld(*ray);
 	ray->d = Normalize(ray->d);
 	ray->medium = medium;
