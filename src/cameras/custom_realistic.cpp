@@ -213,7 +213,15 @@ float CustomRealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) c
 	Float cos4Theta = (cosTheta * cosTheta) * (cosTheta * cosTheta);
 	Float sampleArea = Pi * exitPupilRadius * exitPupilRadius;
 
-	return cos4Theta * sampleArea  / (film_distance_ * film_distance_);
+	Float a2 = filmPoint.x * filmPoint.x + filmPoint.y * filmPoint.y;
+	Float z2 = film_distance_ * film_distance_;
+	Float r2 = exitPupilRadius * exitPupilRadius;
+	Float x1 = a2 + z2 - r2;
+	Float x2 = std::sqrt((a2 + z2 + r2)*(a2 + z2 + r2) - 4.0f*r2*a2);
+	Float f = 0.5f * (1.0f - x1 / x2);
+
+	//return f;
+	return cos4Theta * sampleArea / (film_distance_ * film_distance_);
 }
 
 
