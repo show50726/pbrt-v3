@@ -1,10 +1,10 @@
 
 #include "cameras/custom_realistic.h"
 
-
 #include "core/parser.h"
 #include "core/sampling.h"
 #include "floatfile.h"
+#include "reflection.h"
 
 namespace pbrt {
 namespace {
@@ -147,7 +147,9 @@ bool CustomRealisticCamera::_CastRayFromFilm(
 			Float n2 = (i > 0 && lens_system_[i - 1].nd != 0)
 				? lens_system_[i - 1].nd
 				: 1;
-			Vector3f refracted = _CalculateRefractedRay(currentRay.d, normal, n1, n2);
+			Vector3f refracted;
+			Refract(Normalize(-currentRay.d), normal, n1 / n2, &refracted);
+			
 			currentRay.d = refracted;
 		}
 
@@ -182,7 +184,7 @@ float CustomRealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) c
 	// Map the [0, 1] from screen to film
 	Point2f pFilm = GetPhysicalExtent(*film, film_diag_).Lerp(s);
 	//std::cout << "s: " << sample.pFilm << std::endl;
-	Point3f filmPoint = Point3f(pFilm.x, pFilm.y, 0);
+	Point3f filmPoint = Point3f(-pFilm.x, pFilm.y, 0);
 	//std::cout << filmPoint * 1000 << std::endl;
 	// Sample from the exit pupil
 
@@ -198,7 +200,7 @@ float CustomRealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) c
 		return 0;
 	}
 
-	ray->o -= Vector3f(0, 0, totalThickness + film_distance_);
+	ray->o -= Vector3f(0, 0, (totalThickness + film_distance_));
 	*ray = CameraToWorld(*ray);
 	ray->d = Normalize(ray->d);
 	ray->medium = medium;
