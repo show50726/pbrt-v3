@@ -134,7 +134,10 @@ bool CustomRealisticCamera::_CastRayFromFilm(
 				return false;
 			}
 		}
-		CHECK_GE(t, 0);
+		
+		if (isnan(t))
+			return false;
+
 		Point3f pHit = currentRay(t);
 		Float r2 = pHit.x * pHit.x + pHit.y * pHit.y;
 		if (r2 > lens_system_[i].apertureRadius * lens_system_[i].apertureRadius) 
@@ -186,8 +189,8 @@ float CustomRealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) c
 	//std::cout << "s: " << sample.pFilm << std::endl;
 	Point3f filmPoint = Point3f(-pFilm.x, pFilm.y, 0);
 	//std::cout << filmPoint * 1000 << std::endl;
-	// Sample from the exit pupil
 
+	// Sample from the exit pupil
 	// Use first lens as exit pupil
 	Float exitPupilRadius = lens_system_.back().apertureRadius;
 	Point2f sampleOnDisk = exitPupilRadius * ConcentricSampleDisk(sample.pLens);
