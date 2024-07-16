@@ -13,7 +13,7 @@ Translate -2.3 -.05 .5
 
 # Your implementation of a realistic lens system
 #
-Camera "realistic" 
+Camera "custom_realistic" 
 	"string specfile" "fisheye.10mm.dat" 
 	"float filmdistance" 23.192
 	"float aperture_diameter" 6.08

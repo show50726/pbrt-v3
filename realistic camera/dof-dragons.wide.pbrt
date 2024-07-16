@@ -2,7 +2,7 @@ Film "image"  "integer xresolution" [300] "integer yresolution" [300] "string fi
 
 
 # For high quality images, use 128 or 512 samples
-Sampler "lowdiscrepancy" "integer pixelsamples" [32] # for final: [512] 
+Sampler "lowdiscrepancy" "integer pixelsamples" [512] # for final: [512] 
 
 #LookAt 2.3 .1 -.7    .4 0 -.9  0 1 0
 Scale 5000 5000 5000
@@ -13,7 +13,7 @@ Translate -2.3 -.05 .5
 
 # Your implementation of a realistic lens system
 #
-Camera "realistic" 
+Camera "custom_realistic" 
 	"string specfile" "wide.22mm.dat" 
 	"float filmdistance" 14.54
 	"float aperture_diameter" 8.756

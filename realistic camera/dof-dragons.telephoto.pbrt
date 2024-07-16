@@ -13,7 +13,7 @@ Translate -2.3 -.05 .5
 
 # Your implementation of a realistic lens system
 #
-Camera "realistic" 
+Camera "custom_realistic" 
 	"string specfile" "telephoto.250mm.dat" 
 	"float filmdistance" 123.74390
 	"float aperture_diameter" 40.5
