@@ -148,7 +148,6 @@ namespace pbrt {
 		RGBSpectrum* texmap, 
 		int width, int height, 
 		RGBSpectrum* sumAreaTable) {
-		sumAreaTable[0] = texmap[0].y();
 		ParallelFor(
 			[sumAreaTable](int64_t i) mutable {
 				sumAreaTable[i] = RGBSpectrum();
