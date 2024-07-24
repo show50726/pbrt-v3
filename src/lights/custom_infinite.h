@@ -92,6 +92,7 @@ namespace pbrt {
 		std::unique_ptr<LightSource[]> lightSources;
 		std::unique_ptr<Distribution2D> distribution;
 		int maxRegionNum;
+		int lightNum;
 		Point3f worldCenter;
 		Float worldRadius;
 		int width;

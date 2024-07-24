@@ -42,7 +42,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace pbrt {
 
-	// CustomInfiniteAreaLight Method Definitions
 	// Implementation of Median Cut Algorithm
 	CustomInfiniteAreaLight::CustomInfiniteAreaLight(const Transform &LightToWorld,
 		const Spectrum &L, int nSamples,
@@ -67,13 +66,12 @@ namespace pbrt {
 
 		width = resolution.x;
 		height = resolution.y;
-		sumAreaTable.reset(new RGBSpectrum[(width+1) * (height+1)]);
+		sumAreaTable.reset(new RGBSpectrum[(width + 1) * (height + 1)]);
 		lightSources.reset(new LightSource[maxRegionNum]);
 
 		CalculateSumAreaTable(texels.get(), width, height, sumAreaTable.get());
 		ProcessMedianCut(texels.get(), sumAreaTable.get(), width, height, lightSources.get());
 	
-
 		std::unique_ptr<Float[]> img(new Float[width * height]);
 		float fwidth = 0.5f / std::min(width, height);
 		ParallelFor(
@@ -115,20 +113,34 @@ namespace pbrt {
 		Float totalEnergy = Query(l, r, b, t).y();
 		Float targetEnergy = 0.5f * totalEnergy;
 	
-		int start = cutVertical ? b : l;
-		int end = cutVertical ? t : r;
-		while (start < end) {
-			int mid = start + ((end - start) >> 1);
+		int ll = cutVertical ? b : l;
+		int rr = cutVertical ? t : r;
+		for (int i = ll + 1; i < rr; i++) {
+			if (cutVertical) {
+				if (Query(l, r, b, i).y() >= targetEnergy)
+					return i;
+			}
+			else {
+				if (Query(l, i, b, t).y() >= targetEnergy)
+					return i;
+			}
+		}
+		return rr;
+
+		/*int lb = (cutVertical ? b : l) + 1;
+		int ub = cutVertical ? t : r;
+		while (lb < ub) {
+			int mid = lb + ((ub - lb) >> 1);
 			Float v = cutVertical ? Query(l, r, b, mid).y() : Query(l, mid, b, t).y();
 
 			if (v < targetEnergy) {
-				start = mid + 1;
+				lb = mid + 1;
 			}
 			else {
-				end = mid;
+				ub = mid;
 			}
 		}
-		return start;
+		return lb;*/
 	}
 
 	// static 
@@ -137,7 +149,6 @@ namespace pbrt {
 		int width, int height, 
 		RGBSpectrum* sumAreaTable) {
 		sumAreaTable[0] = texmap[0].y();
-		std::cout << "Start Init Table" << std::endl;
 		ParallelFor(
 			[sumAreaTable](int64_t i) mutable {
 				sumAreaTable[i] = RGBSpectrum();
@@ -148,9 +159,7 @@ namespace pbrt {
 				sumAreaTable[i * width] = RGBSpectrum();
 			},
 			height, 32);
-		std::cout << "Finish Init Table" << std::endl;
 
-		std::cout << "Start Fill in Table" << std::endl;
 		// TODO: Make this parallel
 		for (int i = 1; i <= width; i++) {
 			for (int j = 1; j <= height; j++) {
@@ -163,7 +172,6 @@ namespace pbrt {
 					- sumAreaTable[originalIndex];
 			}
 		}
-		std::cout << "Finish Fill in Table" << std::endl;
 	}
 
 	void CustomInfiniteAreaLight::ProcessMedianCut(
@@ -171,21 +179,23 @@ namespace pbrt {
 		RGBSpectrum* sumAreaTable,
 		int width, int height,
 		LightSource* lightSources) {
-		std::queue<std::array<int, 4>> blocks;
-		blocks.push(std::array<int, 4>{ 0, width, 0, height });
+		auto comp = [](std::array<int, 4> a, std::array<int, 4> b) { 
+			return std::max(a[3] - a[2], a[1] - a[0]) > std::max(b[3] - b[2], b[1] - b[0]); };
+		std::priority_queue<std::array<int, 4>, std::vector<std::array<int, 4>>, decltype(comp) >
+			blocks(comp);
+		blocks.push(std::array<int, 4>{ 1, width, 1, height });
 		
 		while (blocks.size() < maxRegionNum) {
-			int l = blocks.front()[0];
-			int r = blocks.front()[1];
-			int b = blocks.front()[2];
-			int t = blocks.front()[3];
-			blocks.pop();
+			int l = blocks.top()[0];
+			int r = blocks.top()[1];
+			int b = blocks.top()[2];
+			int t = blocks.top()[3];
 
-			if (r - l < 2 && t - b < 2) {
-				blocks.push(std::array<int, 4>{ l, r, b, t });
-				continue;
+			if (r - l < 1 && t - b < 1) {
+				break;
 			}
 
+			blocks.pop();
 			int cut = FindMedianCut(l, r, b, t);
 			if (r - l < t - b) {
 				blocks.push(std::array<int, 4>{ l, r, cut, t });
@@ -196,20 +206,17 @@ namespace pbrt {
 				blocks.push(std::array<int, 4>{ cut, r, b, t });
 			}
 		}
-
 		std::cout << "Blocks Size: " << blocks.size() << std::endl;
+		lightNum = blocks.size();
 
 		for (int i = 0; i < blocks.size(); i++) {
-			std::array<int, 4> current = blocks.front();
+			std::array<int, 4> current = blocks.top();
 			blocks.pop();
 
 			int num = (current[1] - current[0])*(current[3] - current[2]);
 			RGBSpectrum color = Query(current[0], current[1], current[2], current[3]);
 
-			if (color.y() < 0.0f) {
-				std::cout << current[0] << " " << current[1] << " " << current[2] << " " << current[3] << std::endl;
-				//std::cout << b0.y() << " " << b1.y() << " " << b2.y() << " " << b3.y() << std::endl;
-			}
+			std::cout << current[0] << " " << current[1] << " " << current[2] << " " << current[3] << std::endl;
 			std::cout << num << std::endl;
 			//color /= (float)num;
 			CHECK(color.y() >= 0.0f);
@@ -241,7 +248,7 @@ namespace pbrt {
 		
 		// Pick which light source to sample
 		CHECK(u[0] < 1 && u[0] >= 0);
-		int sampleLightIndex = u[0] * maxRegionNum;
+		int sampleLightIndex = u[0] * lightNum;
 
 		return Spectrum(lightSources[sampleLightIndex].spectrum, 
 			SpectrumType::Illuminant);
