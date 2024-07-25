@@ -106,7 +106,8 @@ namespace pbrt {
 
 	int CustomInfiniteAreaLight::FindMedianCut(
 		int l, int r, int b, int t) {
-		bool cutVertical = (t - b) > (r - l);
+		Float sinTheta = std::sin(Pi * (t + b) * 0.5f / (Float)height);
+		bool cutVertical = (t - b) > ((r - l) * sinTheta);
 
 		Float totalEnergy = Query(l, r, b, t).y();
 		Float targetEnergy = 0.5f * totalEnergy;
@@ -162,15 +163,16 @@ namespace pbrt {
 			},
 			height, 32);
 
+		float solidAngle = ((2.f * Pi) / (width - 1)) * ((Pi) / (height - 1));
 		// TODO: Make this parallel
 		for (int i = 1; i <= width; i++) {
 			for (int j = 1; j <= height; j++) {
 				int index = j * (width + 1) + i;
 				int originalIndex = (j - 1)*width + (i - 1);
 
-				Float sinTheta = std::sin(Pi * ((Float)j - 0.5f) / (Float)height);
+				Float sinTheta = std::sin(Pi * (Float)j / (Float)height);
 
-				sumAreaTable[index] = texmap[originalIndex] * sinTheta
+				sumAreaTable[index] = texmap[originalIndex] * solidAngle * sinTheta
 					+ sumAreaTable[j * (width + 1) + (i - 1)]
 					+ sumAreaTable[(j - 1) * (width + 1) + i]
 					- sumAreaTable[(j - 1) * (width + 1) + (i - 1)];
@@ -183,10 +185,8 @@ namespace pbrt {
 		int l, int r, int b, int t,
 		int depth) {
 		if (depth == 0) {
-			int num = (r - l + 1)*(t - b + 1);
 			RGBSpectrum color = Query(l, r, b, t);
 
-			color /= (float)num;
 			CHECK(color.y() >= 0.0f);
 			std::cout << l << " " << r << " " << b << " " << t << std::endl;
 			//std::cout << num << std::endl;
@@ -208,13 +208,15 @@ namespace pbrt {
 			return;
 		}
 
-		if (r - l < t - b) {
+		Float sinTheta = std::sin(Pi * (t + b) * 0.5f / (Float)height);
+		bool cutVertical = (t - b) > ((r - l) * sinTheta);
+		if (cutVertical) {
 			ProcessMedianCut(texmap, l, r, b, cut, depth - 1);
-			ProcessMedianCut(texmap, l, r, cut, t, depth - 1);
+			ProcessMedianCut(texmap, l, r, cut+1, t, depth - 1);
 		}
 		else {
 			ProcessMedianCut(texmap, l, cut, b, t, depth - 1);
-			ProcessMedianCut(texmap, cut, r, b, t, depth - 1);
+			ProcessMedianCut(texmap, cut+1, r, b, t, depth - 1);
 		}
 	}
 
