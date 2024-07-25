@@ -45,9 +45,9 @@ namespace pbrt {
 	// Implementation of Median Cut Algorithm
 	CustomInfiniteAreaLight::CustomInfiniteAreaLight(const Transform &LightToWorld,
 		const Spectrum &L, int nSamples,
-		const std::string &texmap, int maxregionnum)
+		const std::string &texmap, int maxdepth)
 		: Light((int)LightFlags::Infinite, LightToWorld, MediumInterface(),
-			nSamples), maxRegionNum(maxregionnum) {
+			nSamples), maxdepth(maxdepth) {
 		// Read texel data from _texmap_ and initialize _Lmap_
 		Point2i resolution;
 		std::unique_ptr<RGBSpectrum[]> texels(nullptr);
@@ -67,11 +67,12 @@ namespace pbrt {
 		width = resolution.x;
 		height = resolution.y;
 		sumAreaTable.reset(new RGBSpectrum[(width + 1) * (height + 1)]);
-		lightSources.reset(new LightSource[maxRegionNum]);
 
 		CalculateSumAreaTable(texels.get(), width, height, sumAreaTable.get());
-		ProcessMedianCut(texels.get(), sumAreaTable.get(), width, height, lightSources.get());
+		ProcessMedianCut(texels.get(), 0, width - 1, 0, height - 1, maxdepth);
 	
+		std::cout << "Light Numbers: " << lightSources.size() << std::endl;
+
 		std::unique_ptr<Float[]> img(new Float[width * height]);
 		float fwidth = 0.5f / std::min(width, height);
 		ParallelFor(
@@ -87,23 +88,20 @@ namespace pbrt {
 			height, 32);
 		distribution.reset(new Distribution2D(img.get(), width, height));
 	}
-	
+
 	RGBSpectrum CustomInfiniteAreaLight::Query(
-		int r, int t) {
-		int index = height * t + r;
+		int x, int y) {
+		int index = (width + 1) * (y + 1) + (x + 1);
 		return sumAreaTable[index];
 	}
 
 	//static 
 	RGBSpectrum CustomInfiniteAreaLight::Query(
 		int l, int r, int b, int t) {
-		// Note: l and b are not included
-		RGBSpectrum b0 = Query(r, t);
-		RGBSpectrum b1 = Query(l, t);
-		RGBSpectrum b2 = Query(r, b);
-		RGBSpectrum b3 = Query(l, b);
-
-		return b0 - b1 - b2 + b3;
+		return Query(r, t)
+			- Query(l - 1, t)
+			- Query(r, b - 1)
+			+ Query(l - 1, b - 1);
 	}
 
 	int CustomInfiniteAreaLight::FindMedianCut(
@@ -112,17 +110,22 @@ namespace pbrt {
 
 		Float totalEnergy = Query(l, r, b, t).y();
 		Float targetEnergy = 0.5f * totalEnergy;
+		std::cout << "target energy: " << targetEnergy << std::endl;
 	
 		int ll = cutVertical ? b : l;
 		int rr = cutVertical ? t : r;
 		for (int i = ll + 1; i < rr; i++) {
 			if (cutVertical) {
-				if (Query(l, r, b, i).y() >= targetEnergy)
+				if (Query(l, r, b, i).y() >= targetEnergy) {
+					std::cout << Query(l, r, b, i).y() << " " << Query(l, r, i+1, t).y() << std::endl;
 					return i;
+				}
 			}
 			else {
-				if (Query(l, i, b, t).y() >= targetEnergy)
+				if (Query(l, i, b, t).y() >= targetEnergy) {
+					std::cout << Query(l, i, b, t).y() << " " << Query(i+1, r, b, t).y() << std::endl;
 					return i;
+				}
 			}
 		}
 		return rr;
@@ -155,82 +158,69 @@ namespace pbrt {
 			width, 32);
 		ParallelFor(
 			[sumAreaTable, &width](int64_t i) mutable {
-				sumAreaTable[i * width] = RGBSpectrum();
+				sumAreaTable[i * (width + 1)] = RGBSpectrum();
 			},
 			height, 32);
 
 		// TODO: Make this parallel
 		for (int i = 1; i <= width; i++) {
 			for (int j = 1; j <= height; j++) {
-				int index = j * width + i;
+				int index = j * (width + 1) + i;
 				int originalIndex = (j - 1)*width + (i - 1);
-				sumAreaTable[index] = 
-					sumAreaTable[(j - 1)*width + i]
-					+ sumAreaTable[j * width + (i - 1)]
-					+ texmap[originalIndex]
-					- sumAreaTable[originalIndex];
+
+				Float sinTheta = std::sin(Pi * ((Float)j - 0.5f) / (Float)height);
+
+				sumAreaTable[index] = texmap[originalIndex] * sinTheta
+					+ sumAreaTable[j * (width + 1) + (i - 1)]
+					+ sumAreaTable[(j - 1) * (width + 1) + i]
+					- sumAreaTable[(j - 1) * (width + 1) + (i - 1)];
 			}
 		}
 	}
 
 	void CustomInfiniteAreaLight::ProcessMedianCut(
 		RGBSpectrum* texmap,
-		RGBSpectrum* sumAreaTable,
-		int width, int height,
-		LightSource* lightSources) {
-		auto comp = [](std::array<int, 4> a, std::array<int, 4> b) { 
-			return std::max(a[3] - a[2], a[1] - a[0]) > std::max(b[3] - b[2], b[1] - b[0]); };
-		std::priority_queue<std::array<int, 4>, std::vector<std::array<int, 4>>, decltype(comp) >
-			blocks(comp);
-		blocks.push(std::array<int, 4>{ 1, width, 1, height });
-		
-		while (blocks.size() < maxRegionNum) {
-			int l = blocks.top()[0];
-			int r = blocks.top()[1];
-			int b = blocks.top()[2];
-			int t = blocks.top()[3];
+		int l, int r, int b, int t,
+		int depth) {
+		if (depth == 0) {
+			int num = (r - l + 1)*(t - b + 1);
+			RGBSpectrum color = Query(l, r, b, t);
 
-			if (r - l < 1 && t - b < 1) {
-				break;
-			}
-
-			blocks.pop();
-			int cut = FindMedianCut(l, r, b, t);
-			if (r - l < t - b) {
-				blocks.push(std::array<int, 4>{ l, r, cut, t });
-				blocks.push(std::array<int, 4>{ l, r, b, cut });
-			}
-			else {
-				blocks.push(std::array<int, 4>{ l, cut, b, t });
-				blocks.push(std::array<int, 4>{ cut, r, b, t });
-			}
-		}
-		std::cout << "Blocks Size: " << blocks.size() << std::endl;
-		lightNum = blocks.size();
-
-		for (int i = 0; i < blocks.size(); i++) {
-			std::array<int, 4> current = blocks.top();
-			blocks.pop();
-
-			int num = (current[1] - current[0])*(current[3] - current[2]);
-			RGBSpectrum color = Query(current[0], current[1], current[2], current[3]);
-
-			std::cout << current[0] << " " << current[1] << " " << current[2] << " " << current[3] << std::endl;
-			std::cout << num << std::endl;
-			//color /= (float)num;
+			color /= (float)num;
 			CHECK(color.y() >= 0.0f);
+			std::cout << l << " " << r << " " << b << " " << t << std::endl;
+			//std::cout << num << std::endl;
 
-			Float u = ((Float)current[1] - 0.5f) / (Float)width;
-			Float v = ((Float)current[3] - 0.5f) / (Float)height;
+			Float u = (Float)(l + r) * 0.5f / (Float)width;
+			Float v = (Float)(b + t) * 0.5f / (Float)height;
 
 			//transform coordinate to theta, phi
-			lightSources[i] = LightSource{ color, 2 * Pi * u,  Pi * v };
+			lightSources.push_back(LightSource{ color, 2 * Pi * u,  Pi * v });
+			return;
+		}
+
+		if (r - l <= 1 && t - b <= 1)
+			return;
+			
+		int cut = FindMedianCut(l, r, b, t);
+
+		if (cut == l || cut == r || cut == b || cut == t) {
+			return;
+		}
+
+		if (r - l < t - b) {
+			ProcessMedianCut(texmap, l, r, b, cut, depth - 1);
+			ProcessMedianCut(texmap, l, r, cut, t, depth - 1);
+		}
+		else {
+			ProcessMedianCut(texmap, l, cut, b, t, depth - 1);
+			ProcessMedianCut(texmap, cut, r, b, t, depth - 1);
 		}
 	}
 
 	Spectrum CustomInfiniteAreaLight::Power() const {
 		return Pi * worldRadius * worldRadius *
-			Spectrum(sumAreaTable[width + height * width],
+			Spectrum(Lmap->Lookup(Point2f(.5f, .5f), .5f),
 				SpectrumType::Illuminant);
 	}
 
@@ -247,15 +237,25 @@ namespace pbrt {
 		
 		// Pick which light source to sample
 		CHECK(u[0] < 1 && u[0] >= 0);
-		int sampleLightIndex = u[0] * lightNum;
+		int sampleLightIndex = u[0] * lightSources.size();
+		*pdf = 1.0f / lightSources.size();
 
-		return Spectrum(lightSources[sampleLightIndex].spectrum, 
+		//std::cout << "y: " << lightSources[sampleLightIndex].spectrum.y() << std::endl;
+		CHECK(lightSources[sampleLightIndex].spectrum.y() >= 0.0f);
+		
+		Float cosTheta = std::cos(lightSources[sampleLightIndex].theta), sinTheta = std::sin(lightSources[sampleLightIndex].theta);
+		Float sinPhi = std::sin(lightSources[sampleLightIndex].phi), cosPhi = std::cos(lightSources[sampleLightIndex].phi);
+		*wi =
+			LightToWorld(Vector3f(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta));
+		*vis = VisibilityTester(ref, Interaction(ref.p + *wi * (2 * worldRadius),
+			ref.time, mediumInterface));
+		return Spectrum(lightSources[sampleLightIndex].spectrum,
 			SpectrumType::Illuminant);
 	}
 
 	Float CustomInfiniteAreaLight::Pdf_Li(const Interaction &, const Vector3f &w) const {
 		ProfilePhase _(Prof::LightPdf);
-		return 1.0f / maxRegionNum;
+		return 1.0f / lightSources.size();
 	}
 
 	Spectrum CustomInfiniteAreaLight::Sample_Le(const Point2f &u1, const Point2f &u2,
@@ -307,10 +307,10 @@ namespace pbrt {
 		std::string texmap = paramSet.FindOneFilename("mapname", "");
 		int nSamples = paramSet.FindOneInt("samples",
 			paramSet.FindOneInt("nsamples", 1));
-		int maxRegionNum = paramSet.FindOneInt("maxregion", 64);
+		int maxDepth = paramSet.FindOneInt("maxdepth", 6);
 		if (PbrtOptions.quickRender) nSamples = std::max(1, nSamples / 4);
 		return std::make_shared<CustomInfiniteAreaLight>(light2world, L * sc, nSamples,
-			texmap, maxRegionNum);
+			texmap, maxDepth);
 	}
 
 }  // namespace pbrt

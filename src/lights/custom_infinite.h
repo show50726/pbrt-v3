@@ -83,16 +83,14 @@ namespace pbrt {
 		int FindMedianCut(int l, int r, int b, int t);
 		void ProcessMedianCut(
 			RGBSpectrum* texmap, 
-			RGBSpectrum* sumAreaTable,
-			int width, int height, 
-			LightSource* lightSources);
+			int l, int r, int b, int t,
+			int depth);
 
 		std::unique_ptr<MIPMap<RGBSpectrum>> Lmap;
 		std::unique_ptr<RGBSpectrum[]> sumAreaTable;
-		std::unique_ptr<LightSource[]> lightSources;
+		std::vector<LightSource> lightSources;
 		std::unique_ptr<Distribution2D> distribution;
-		int maxRegionNum;
-		int lightNum;
+		int maxdepth;
 		Point3f worldCenter;
 		Float worldRadius;
 		int width;
