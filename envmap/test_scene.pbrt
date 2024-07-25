@@ -33,7 +33,7 @@ AttributeBegin
 #Rotate 180 0 0 1 # for morn
 # pollution is pretty good
 LightSource "custom_infinite" "string mapname" ["textures/grace_latlong.exr"]
-	"integer nsamples" [4] "integer maxregion" [64]
+	"integer nsamples" [4] "integer maxdepth" [6]
 AttributeEnd
 
 AttributeBegin
