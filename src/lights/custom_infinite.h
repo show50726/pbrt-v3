@@ -86,6 +86,9 @@ namespace pbrt {
 			RGBSpectrum* texmap, 
 			int l, int r, int b, int t,
 			int depth);
+		Point2f CalculateCentroid(
+			RGBSpectrum* texmap,
+			int l, int r, int b, int t);
 
 		std::unique_ptr<MIPMap<RGBSpectrum>> Lmap;
 		std::unique_ptr<RGBSpectrum[]> sumAreaTable;

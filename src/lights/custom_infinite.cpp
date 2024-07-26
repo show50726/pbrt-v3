@@ -174,8 +174,9 @@ namespace pbrt {
 			CHECK(color.y() >= 0.0f);
 			// std::cout << l << " " << r << " " << b << " " << t << std::endl;
 
-			Float u = (Float)(l + r) * 0.5f / (Float)width;
-			Float v = (Float)(b + t) * 0.5f / (Float)height;
+			Point2f centroid = CalculateCentroid(texmap, l, r, b, t);
+			Float u = centroid.x / width;
+			Float v = centroid.y / height;
 
 			//transform coordinate to theta, phi
 			lightSources.emplace_back(LightSource{ color, 2 * Pi * u,  Pi * v });
@@ -200,6 +201,23 @@ namespace pbrt {
 			ProcessMedianCut(texmap, l, cut, b, t, depth - 1);
 			ProcessMedianCut(texmap, cut + 1, r, b, t, depth - 1);
 		}
+	}
+
+	Point2f CustomInfiniteAreaLight::CalculateCentroid(
+		RGBSpectrum* texmap,
+		int l, int r, int b, int t) {
+		Float wSum = 0.0f;
+		Float hSum = 0.0f;
+		Float sum = 0.0f;
+		for (int i = l; i < r; i++) {
+			for (int j = b; j <= t; j++) {
+				Float y = texmap[j * width + i].y();
+				wSum += y * i;
+				hSum += y * j;
+				sum += y;
+			}
+		}
+		return Point2f(wSum / sum, hSum / sum);
 	}
 
 	Spectrum CustomInfiniteAreaLight::Power() const {
