@@ -106,7 +106,7 @@ namespace pbrt {
 
 	int CustomInfiniteAreaLight::FindMedianCut(
 		int l, int r, int b, int t) {
-		Float sinTheta = std::sin(Pi * (t + b) * 0.5f / (Float)height);
+		Float sinTheta = 1;// std::sin(Pi * (t + b) * 0.5f / (Float)height);
 		bool cutVertical = (t - b) > ((r - l) * sinTheta);
 
 		Float totalEnergy = Query(l, r, b, t).y();
@@ -208,7 +208,7 @@ namespace pbrt {
 			return;
 		}
 
-		Float sinTheta = std::sin(Pi * (t + b) * 0.5f / (Float)height);
+		Float sinTheta = 1;// std::sin(Pi * (t + b) * 0.5f / (Float)height);
 		bool cutVertical = (t - b) > ((r - l) * sinTheta);
 		if (cutVertical) {
 			ProcessMedianCut(texmap, l, r, b, cut, depth - 1);
