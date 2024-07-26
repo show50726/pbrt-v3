@@ -37,7 +37,7 @@ reference (pixelsamples=128):
 
 my implementation:  
 |  maxdepth\pixelsamples  |  64  |  128  |  256  |
-|  ----  |  ----  |  ----  |  ----  |  ----  |
+|  ----  |  ----  |  ----  |  ----  |
 |  3  | ![](envlight-3-64.png) | ![](envlight-3-128.png) | ![](envlight-3-256.png) |
 |  4  | ![](envlight-4-64.png) | ![](envlight-4-128.png) | ![](envlight-4-256.png) |
 |  5  | ![](envlight-5-64.png) | ![](envlight-5-128.png) | ![](envlight-5-256.png) |
