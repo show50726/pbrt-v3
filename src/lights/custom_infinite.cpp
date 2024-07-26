@@ -241,6 +241,7 @@ namespace pbrt {
 		// Pick which light source to sample
 		CHECK(u[0] < 1 && u[0] >= 0);
 		int sampleLightIndex = u[0] * lightSources.size();
+		CHECK(sampleLightIndex >= 0 && sampleLightIndex < lightSources.size());
 
 		// std::cout << "y: " << lightSources[sampleLightIndex].spectrum.y() << std::endl;
 		CHECK(lightSources[sampleLightIndex].spectrum.y() >= 0.0f);
