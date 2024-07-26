@@ -143,7 +143,6 @@ namespace pbrt {
 			height, 32);
 
 		float solidAngle = ((2.f * Pi) / (width - 1)) * ((Pi) / (height - 1));
-		// TODO: Make this parallel
 		for (int i = 1; i <= width; i++) {
 			for (int j = 1; j <= height; j++) {
 				int index = j * (width + 1) + i;
