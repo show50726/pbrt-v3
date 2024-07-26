@@ -109,39 +109,21 @@ namespace pbrt {
 		Float totalEnergy = Query(l, r, b, t).y();
 		Float targetEnergy = 0.5f * totalEnergy;
 		// std::cout << "Target energy: " << targetEnergy << std::endl;
-	
-		int ll = cutVertical ? b : l;
-		int rr = cutVertical ? t : r;
-		for (int i = ll + 1; i < rr; i++) {
-			if (cutVertical) {
-				if (Query(l, r, b, i).y() >= targetEnergy) {
-					// std::cout << Query(l, r, b, i).y() << " " << Query(l, r, i+1, t).y() << std::endl;
-					return i;
-				}
-			}
-			else {
-				if (Query(l, i, b, t).y() >= targetEnergy) {
-					// std::cout << Query(l, i, b, t).y() << " " << Query(i+1, r, b, t).y() << std::endl;
-					return i;
-				}
-			}
-		}
-		return rr;
 
-		/*int lb = (cutVertical ? b : l) + 1;
-		int ub = cutVertical ? t : r;
-		while (lb < ub) {
-			int mid = lb + ((ub - lb) >> 1);
+		int min_b = (cutVertical ? b : l) + 1;
+		int max_b = cutVertical ? t : r;
+		while (min_b < max_b) {
+			int mid = min_b + ((max_b - min_b) >> 1);
 			Float v = cutVertical ? Query(l, r, b, mid).y() : Query(l, mid, b, t).y();
 
 			if (v < targetEnergy) {
-				lb = mid + 1;
+				min_b = mid + 1;
 			}
 			else {
-				ub = mid;
+				max_b = mid;
 			}
 		}
-		return lb;*/
+		return min_b;
 	}
 
 	// static 
