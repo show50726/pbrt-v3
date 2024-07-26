@@ -160,7 +160,7 @@ namespace pbrt {
 
 	bool CustomInfiniteAreaLight::ShouldCutVertical(int l, int r, int b, int t) {
 		// Float sinTheta = std::sin(Pi * (t + b) * 0.5f / (Float)height);
-		// bool cutVertical = (t - b) > ((r - l) * sinTheta);
+		// return (t - b) > ((r - l) * sinTheta);
 		return t - b > r - l;
 	}
 
