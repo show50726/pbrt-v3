@@ -178,7 +178,7 @@ namespace pbrt {
 			Float v = (Float)(b + t) * 0.5f / (Float)height;
 
 			//transform coordinate to theta, phi
-			lightSources.push_back(LightSource{ color, 2 * Pi * u,  Pi * v });
+			lightSources.emplace_back(LightSource{ color, 2 * Pi * u,  Pi * v });
 			return;
 		}
 
