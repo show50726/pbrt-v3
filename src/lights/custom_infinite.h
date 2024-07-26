@@ -80,7 +80,8 @@ namespace pbrt {
 		static void CalculateSumAreaTable(RGBSpectrum* texmap, int width, int height, RGBSpectrum* sumAreaTable);
 		RGBSpectrum Query(int r, int t);
 		RGBSpectrum Query(int l, int r, int b, int t);
-		int FindMedianCut(int l, int r, int b, int t);
+		int FindMedianCut(int l, int r, int b, int t, bool cutVertical);
+		bool ShouldCutVertical(int l, int r, int b, int t);
 		void ProcessMedianCut(
 			RGBSpectrum* texmap, 
 			int l, int r, int b, int t,

@@ -71,7 +71,7 @@ namespace pbrt {
 		CalculateSumAreaTable(texels.get(), width, height, sumAreaTable.get());
 		ProcessMedianCut(texels.get(), 0, width - 1, 0, height - 1, maxdepth);
 	
-		std::cout << "Light Numbers: " << lightSources.size() << std::endl;
+		// std::cout << "Light Numbers: " << lightSources.size() << std::endl;
 
 		std::unique_ptr<Float[]> img(new Float[width * height]);
 		float fwidth = 0.5f / std::min(width, height);
@@ -95,7 +95,6 @@ namespace pbrt {
 		return sumAreaTable[index];
 	}
 
-	//static 
 	RGBSpectrum CustomInfiniteAreaLight::Query(
 		int l, int r, int b, int t) {
 		return Query(r, t)
@@ -105,26 +104,24 @@ namespace pbrt {
 	}
 
 	int CustomInfiniteAreaLight::FindMedianCut(
-		int l, int r, int b, int t) {
-		Float sinTheta = 1;// std::sin(Pi * (t + b) * 0.5f / (Float)height);
-		bool cutVertical = (t - b) > ((r - l) * sinTheta);
-
+		int l, int r, int b, int t,
+		bool cutVertical) {
 		Float totalEnergy = Query(l, r, b, t).y();
 		Float targetEnergy = 0.5f * totalEnergy;
-		std::cout << "target energy: " << targetEnergy << std::endl;
+		// std::cout << "Target energy: " << targetEnergy << std::endl;
 	
 		int ll = cutVertical ? b : l;
 		int rr = cutVertical ? t : r;
 		for (int i = ll + 1; i < rr; i++) {
 			if (cutVertical) {
 				if (Query(l, r, b, i).y() >= targetEnergy) {
-					std::cout << Query(l, r, b, i).y() << " " << Query(l, r, i+1, t).y() << std::endl;
+					// std::cout << Query(l, r, b, i).y() << " " << Query(l, r, i+1, t).y() << std::endl;
 					return i;
 				}
 			}
 			else {
 				if (Query(l, i, b, t).y() >= targetEnergy) {
-					std::cout << Query(l, i, b, t).y() << " " << Query(i+1, r, b, t).y() << std::endl;
+					// std::cout << Query(l, i, b, t).y() << " " << Query(i+1, r, b, t).y() << std::endl;
 					return i;
 				}
 			}
@@ -180,6 +177,12 @@ namespace pbrt {
 		}
 	}
 
+	bool CustomInfiniteAreaLight::ShouldCutVertical(int l, int r, int b, int t) {
+		// Float sinTheta = std::sin(Pi * (t + b) * 0.5f / (Float)height);
+		// bool cutVertical = (t - b) > ((r - l) * sinTheta);
+		return t - b > r - l;
+	}
+
 	void CustomInfiniteAreaLight::ProcessMedianCut(
 		RGBSpectrum* texmap,
 		int l, int r, int b, int t,
@@ -188,8 +191,7 @@ namespace pbrt {
 			RGBSpectrum color = Query(l, r, b, t);
 
 			CHECK(color.y() >= 0.0f);
-			std::cout << l << " " << r << " " << b << " " << t << std::endl;
-			//std::cout << num << std::endl;
+			// std::cout << l << " " << r << " " << b << " " << t << std::endl;
 
 			Float u = (Float)(l + r) * 0.5f / (Float)width;
 			Float v = (Float)(b + t) * 0.5f / (Float)height;
@@ -201,22 +203,21 @@ namespace pbrt {
 
 		if (r - l <= 1 && t - b <= 1)
 			return;
-			
-		int cut = FindMedianCut(l, r, b, t);
+		
+		bool cutVertical = ShouldCutVertical(l, r, b, t);
+		int cut = FindMedianCut(l, r, b, t, cutVertical);
 
 		if (cut == l || cut == r || cut == b || cut == t) {
 			return;
 		}
 
-		Float sinTheta = 1;// std::sin(Pi * (t + b) * 0.5f / (Float)height);
-		bool cutVertical = (t - b) > ((r - l) * sinTheta);
 		if (cutVertical) {
 			ProcessMedianCut(texmap, l, r, b, cut, depth - 1);
-			ProcessMedianCut(texmap, l, r, cut+1, t, depth - 1);
+			ProcessMedianCut(texmap, l, r, cut + 1, t, depth - 1);
 		}
 		else {
 			ProcessMedianCut(texmap, l, cut, b, t, depth - 1);
-			ProcessMedianCut(texmap, cut+1, r, b, t, depth - 1);
+			ProcessMedianCut(texmap, cut + 1, r, b, t, depth - 1);
 		}
 	}
 
@@ -242,7 +243,7 @@ namespace pbrt {
 		int sampleLightIndex = u[0] * lightSources.size();
 		*pdf = 1.0f / lightSources.size();
 
-		//std::cout << "y: " << lightSources[sampleLightIndex].spectrum.y() << std::endl;
+		// std::cout << "y: " << lightSources[sampleLightIndex].spectrum.y() << std::endl;
 		CHECK(lightSources[sampleLightIndex].spectrum.y() >= 0.0f);
 		
 		Float cosTheta = std::cos(lightSources[sampleLightIndex].theta), sinTheta = std::sin(lightSources[sampleLightIndex].theta);
