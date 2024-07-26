@@ -71,6 +71,7 @@ namespace pbrt {
 		CalculateSumAreaTable(texels.get(), width, height, sumAreaTable.get());
 		ProcessMedianCut(texels.get(), 0, width - 1, 0, height - 1, maxdepth);
 	
+		pdf = 1.0f / lightSources.size();
 		// std::cout << "Light Numbers: " << lightSources.size() << std::endl;
 
 		std::unique_ptr<Float[]> img(new Float[width * height]);
@@ -240,7 +241,6 @@ namespace pbrt {
 		// Pick which light source to sample
 		CHECK(u[0] < 1 && u[0] >= 0);
 		int sampleLightIndex = u[0] * lightSources.size();
-		*pdf = 1.0f / lightSources.size();
 
 		// std::cout << "y: " << lightSources[sampleLightIndex].spectrum.y() << std::endl;
 		CHECK(lightSources[sampleLightIndex].spectrum.y() >= 0.0f);
@@ -251,13 +251,16 @@ namespace pbrt {
 			LightToWorld(Vector3f(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta));
 		*vis = VisibilityTester(ref, Interaction(ref.p + *wi * (2 * worldRadius),
 			ref.time, mediumInterface));
+		*pdf = this->pdf;
+		if (sinTheta == 0)
+			*pdf = 0.0f;
 		return Spectrum(lightSources[sampleLightIndex].spectrum,
 			SpectrumType::Illuminant);
 	}
 
 	Float CustomInfiniteAreaLight::Pdf_Li(const Interaction &, const Vector3f &w) const {
 		ProfilePhase _(Prof::LightPdf);
-		return 1.0f / lightSources.size();
+		return pdf;
 	}
 
 	Spectrum CustomInfiniteAreaLight::Sample_Le(const Point2f &u1, const Point2f &u2,

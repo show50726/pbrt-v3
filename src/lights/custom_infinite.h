@@ -99,6 +99,7 @@ namespace pbrt {
 		Float worldRadius;
 		int width;
 		int height;
+		Float pdf;
 	};
 
 	std::shared_ptr<CustomInfiniteAreaLight> CreateCustomInfiniteLight(
