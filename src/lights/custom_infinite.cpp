@@ -212,7 +212,8 @@ namespace pbrt {
 		Float sum = 0.0f;
 		for (int i = l; i < r; i++) {
 			for (int j = b; j <= t; j++) {
-				Float y = texmap[j * width + i].y();
+				Float sinTheta = std::sin(Pi * (Float)j / (Float)height);
+				Float y = texmap[j * width + i].y() * sinTheta;
 				wSum += y * i;
 				hSum += y * j;
 				sum += y;
