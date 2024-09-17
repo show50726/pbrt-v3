@@ -43,6 +43,9 @@ my implementation:
 |  5  | ![](envlight-5-64.png) | ![](envlight-5-128.png) | ![](envlight-5-256.png) |
 |  6  | ![](envlight-6-64.png) | ![](envlight-6-128.png) | ![](envlight-6-256.png) |
 
+# Possible Improvement
+Structured Importance Sampling: https://cseweb.ucsd.edu/~ravir/papers/structured/structured.pdf
+
 # References
 
 P. Debevec, [A Median Cut Algorithm for Light Probe Sampling](https://vgl.ict.usc.edu/Research/MedianCut/), SIGGRAPH 2006 Sketches and Applications.
